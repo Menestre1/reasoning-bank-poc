@@ -1,5 +1,7 @@
-Проект разработан в рамках публикации на InfoStart.ru
-Ссылка на публикацию https://infostart.ru/1c/reports/2508153/
+Проект разработан в рамках публикации на **InfoStart.ru**
+
+Ссылка на публикацию 
+[https://infostart.ru/1c/reports/2508153/](https://infostart.ru/1c/articles/2683130/)
  
  # ReasoningBank PoC — Семантическая память для Lir Agent
 
