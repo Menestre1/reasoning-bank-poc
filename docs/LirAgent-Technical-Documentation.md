@@ -701,9 +701,32 @@ const knowledgeItems = [
 ];
 ```
 
-### Learning from Dialog (`handleLearn()` method, lines 762-794)
+### Learning from Dialog (`handleLearn()` and `handleCommandInFeedbackMode()` methods)
 
-User can explicitly save successful Q&A as knowledge:
+User can explicitly save successful Q&A as knowledge using `/learn` command.
+
+#### `handleCommandInFeedbackMode()` (lines ~782-888)
+Centralized command processing while in `waitingForFeedback` mode:
+```
+User in feedback mode: "/learn"
+    │
+    ▼
+[handleCommandInFeedbackMode()]
+    │
+    ├─▶ Check if command starts with '/'
+    ├─▶ For '/learn':
+    │       ├─▶ Verify lastUserInput & lastAgentResponse exist
+    │       ├─▶ Create experience with is_skill: true (permanent)
+    │       ├─▶ exitsFeedbackMode: false (stay in feedback mode)
+    │       └─▶ Return success message + "Я справился?" prompt
+    │
+    ├─▶ For '/exit': exitsFeedbackMode: true (end session)
+    ├─▶ For '/stats', '/tools': run command, stay in feedback mode
+    └─▶ For context-changing commands: ask to cancel feedback first
+```
+
+#### `handleLearn()` (lines ~890-910)
+Direct learning when NOT in feedback mode:
 ```
 User: "/learn"
     │
@@ -719,10 +742,12 @@ User: "/learn"
     │       domain: 'knowledge'
     │       outcome: 'success'
     │       is_skill: true (immediately)
-    │       consecutive_successes: 3 (immediately)
+    │       confidence: 0.95
     │
-    └─▶ Next queries will retrieve this as high-priority knowledge
+    └─▶ Next queries retrieve this as high-priority knowledge (scoring bonus +0.2)
 ```
+
+**Key change:** `/learn` now works even in `waitingForFeedback` mode without resetting the state.
 
 ---
 
