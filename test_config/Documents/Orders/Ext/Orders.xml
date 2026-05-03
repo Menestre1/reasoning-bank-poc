@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<MetaDataObject type="Document" uuid="87654321-4321-4321-4321-210987654321">
+  <Properties>
+    <Property Name="Name">Orders</Property>
+    <Property Name="Synonym">Заказы</Property>
+    <Property Name="Module">Процедура ПередЗаписью()
+    НачатьТранзакцию();
+    Попытка
+        Записать(РежимЗаписиДокумента.Проведение);
+    Исключение
+        ОтменитьТранзакцию();
+        ВызватьИсключение;
+    КонецПопытки;
+    ЗафиксироватьТранзакцию();
+КонецПроцедуры</Property>
+  </Properties>
+</MetaDataObject>

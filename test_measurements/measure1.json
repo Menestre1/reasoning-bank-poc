@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-04-30T12:00:00Z",
+  "environment": "Server 1C",
+  "measurements": [
+    {
+      "object": "Документ.Заказ",
+      "method": "ПередЗаписью",
+      "duration_ms": 1250,
+      "call_count": 3,
+      "metadata": {"user": "admin"}
+    },
+    {
+      "object": "Документ.Заказ",
+      "method": "ПриЗаписи",
+      "duration_ms": 850,
+      "call_count": 3,
+      "metadata": {}
+    },
+    {
+      "object": "Справочник.Товары",
+      "method": "ОбработкаПриСоздании",
+      "duration_ms": 320,
+      "call_count": 10,
+      "metadata": {}
+    }
+  ]
+}

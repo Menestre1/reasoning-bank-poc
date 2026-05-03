@@ -1,0 +1,66 @@
+{
+  // Visit https://aka.ms/tsconfig to read more about this file
+  "compilerOptions": {
+    // File Layout
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    // Environment Settings
+    // See also https://aka.ms/tsconfig/module
+    "module": "commonjs",
+    "target": "es2022",
+    "types": ["node"],
+
+    // Other Outputs
+    "sourceMap": true,
+    "declaration": false,
+    "declarationMap": false,
+
+    // Stricter Typechecking Options
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+
+    // Style Options
+    // "noImplicitReturns": true,
+    // "noImplicitOverride": true,
+    // "noUnusedLocals": true,
+    // "noUnusedParameters": true,
+    // "noFallthroughCasesInSwitch": true,
+    // "noPropertyAccessFromIndexSignature": true,
+
+    // Recommended Options
+    "strict": true,
+    "jsx": "react-jsx",
+    "verbatimModuleSyntax": false,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+    "moduleResolution": "node10",
+    "ignoreDeprecations": "6.0",
+    "esModuleInterop": true
+  },
+    "exclude": [
+    "node_modules",
+    "test-*.ts",
+    "**/test-*.ts",
+    "full-test.ts",
+    "simple-test.ts",
+    "my-full-test.ts",
+    "seed-tools.ts",
+    "import-knowledge.ts",
+    "verify-fix.ts",
+    "poc-test.mjs",
+    "direct-seed-tools.ts",
+    "minimal-insert.ts",
+    "chat.ts",
+    "check-domains.ts",
+    "check-tool-records.ts",
+    "check-tools.ts",
+    "direct-check.ts",
+    "import-skill.ts",
+    "migrate-add-language-column.ts",
+    "test_all_stages.ts",
+    "src/LirAgent - nollm.ts"
+  ]
+}
