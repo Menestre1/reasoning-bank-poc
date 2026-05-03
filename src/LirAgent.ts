@@ -326,8 +326,8 @@ export class LirAgent {
       };
     }
 
-    // Learn from last successful dialog
-    if (userInput === '/learn') {
+    // Learn from last successful dialog (only if NOT waiting for feedback)
+    if (userInput === '/learn' && !this.session.waitingForFeedback) {
       return this.handleLearn();
     }
 
@@ -432,6 +432,26 @@ export class LirAgent {
     
     // Если ждём feedback после предыдущего ответа — обрабатываем ДО processWithLanguage
     if (this.session.waitingForFeedback) {
+      // COMMANDS: Allow commands (starting with '/') even in feedback mode
+      if (userInput.startsWith('/')) {
+        const commandResult = await this.handleCommandInFeedbackMode(userInput);
+        // If command exits feedback mode (like /exit), return directly
+        if (commandResult.exitsFeedbackMode) {
+          this.session.waitingForFeedback = false;
+          return commandResult;
+        }
+        // Otherwise, stay in feedback mode and ask again
+        // Merge commandResult fields into response object
+        const responseText = commandResult.response || '';
+        const fullPrompt = commandResult.fullPrompt || '';
+        const warnings = commandResult.warnings || [];
+        return {
+          response: responseText + '\n\n---\n**Я справился? (да/нет/отмена)**',
+          fullPrompt,
+          warnings,
+          action: 'waiting_feedback',
+        };
+      }
       return this.processWithLanguage(userInput, this.session.lastDetectedLanguage || 'general');
     }
 
@@ -757,6 +777,114 @@ export class LirAgent {
         warnings: enriched.warnings,
         action: 'waiting_feedback',
       };
+  }
+
+  private async handleCommandInFeedbackMode(userInput: string): Promise<any> {
+    // Handle commands while waiting for feedback
+    // Returns an object with exitsFeedbackMode flag
+    const lowerInput = userInput.toLowerCase().trim();
+
+    // /exit - exit chat, clear feedback mode
+    if (lowerInput === '/exit' || lowerInput === '/quit') {
+      return {
+        ...this.createResponse('До свидания!'),
+        exitsFeedbackMode: true,
+      };
+    }
+
+    // /learn - save last Q&A as knowledge, but STAY in feedback mode
+    if (lowerInput === '/learn') {
+      if (!this.session.lastUserInput || !this.session.lastAgentResponse) {
+        return {
+          ...this.createResponse('❌ Нет предыдущего ответа для сохранения.'),
+          exitsFeedbackMode: false,
+        };
+      }
+
+      try {
+        const task = this.session.lastUserInput.slice(0, 100);
+        const content = this.session.lastAgentResponse.slice(0, 2000);
+
+        await this.memory.recordExperience({
+          id: `knowledge-learned-${Date.now()}`,
+          task,
+          outcome: 'success',
+          content,
+          domain: 'knowledge',
+          error_type: 'none',
+          confidence: 0.95,
+          metadata: {
+            language: this.session.lastDetectedLanguage || 'general',
+            is_skill: true,
+            created_from_dialog: true,
+            user_input: this.session.lastUserInput,
+          },
+        });
+
+        console.log(`[LirAgent] Saved knowledge from dialog: "${task}"`);
+        return {
+          ...this.createResponse('✅ Знание сохранено! В будущем я смогу опираться на этот ответ.'),
+          exitsFeedbackMode: false, // Stay in feedback mode
+        };
+      } catch (error: any) {
+        console.error('[LirAgent] Error saving knowledge:', error.message);
+        return {
+          ...this.createResponse(`❌ Ошибка сохранения: ${error.message}`),
+          exitsFeedbackMode: false,
+        };
+      }
+    }
+
+    // /stats - show stats, stay in feedback mode
+    if (lowerInput === '/stats' || lowerInput === '/statistics') {
+      const stats = await this.getStats();
+      return {
+        ...stats,
+        exitsFeedbackMode: false,
+      };
+    }
+
+    // /tools - show tools, stay in feedback mode
+    if (lowerInput === '/tools' || lowerInput === '/help') {
+      const knowledgeResult = await this.searchKnowledge('список всех инструментов и команд');
+      if (knowledgeResult.content) {
+        const messages: ChatMessage[] = [
+          { role: 'system', content: `Ответь на вопрос пользователя, используя ТОЛЬКО следующую информацию, без добавлений:\n\n${knowledgeResult.content}\n\nКонец информации.` },
+          { role: 'user', content: userInput }
+        ];
+        const llmResponse = await this.llmClient.chat(messages, this.llmModel);
+        return {
+          response: llmResponse,
+          fullPrompt: '',
+          warnings: [],
+          action: 'respond',
+          exitsFeedbackMode: false,
+        };
+      }
+      return {
+        ...this.createResponse('Для просмотра инструментов используйте команды напрямую, начиная с /.'),
+        exitsFeedbackMode: false,
+      };
+    }
+
+    // For other commands that change context - EXIT feedback mode
+    const contextChangingCommands = ['/load-config', '/search-code', '/load-measurements', '/build-graph', '/compare-config', '/extract-my-code', '/explain', '/diff-module', '/changed-objects', '/callers', '/callees', '/cycles', '/graph-viz', '/explain-slow', '/top-slow', '/semantic-search', '/comparison-summary'];
+    const isContextChanging = contextChangingCommands.some(cmd => userInput.startsWith(cmd));
+    
+    if (isContextChanging) {
+      // Ask user if they want to cancel feedback
+      return {
+        ...this.createResponse('Вы хотите отменить оценку предыдущего ответа и перейти к новой команде? (да/нет)'),
+        exitsFeedbackMode: false,
+        askCancelFeedback: true,
+      };
+    }
+
+    // Unknown command in feedback mode
+    return {
+      ...this.createResponse(`❌ Неизвестная команда "${userInput}" в режиме ожидания оценки. Доступные команды: /learn, /stats, /tools, /help, /exit`),
+      exitsFeedbackMode: false,
+    };
   }
 
   private async handleLearn(): Promise<any> {
