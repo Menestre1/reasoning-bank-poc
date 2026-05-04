@@ -1,4 +1,4 @@
-Проект разработан в рамках публикации на **InfoStart.ru**
+Проект разработан в рамках публикации на ![Логотип Инфостарт](https://infostart.ru/bitrix/templates/sandbox_empty/assets/tpl/abo/img/logo.svg)
 
 Ссылка на публикацию 
 [https://infostart.ru/1c/reports/2508153/](https://infostart.ru/1c/articles/2683130/)
