@@ -424,13 +424,23 @@ class OllamaClient {
 | Файл | Описание |
 |------|----------|
 | `docs/LirAgent-Technical-Documentation.md` | Полная тех. документация LirAgent: архитектура, память, feedback loop, promotion, анти-паттерны |
-| `docs/MainArchitecture21.md` | 44 правила архитектуры LirAgent 2.0 — генетический код системы памяти |
+| `docs/MainArchitecture21.md` | 44 правила архитектуры LirAgent 2.1a — генетический код системы памяти, L0–L7 |
 | `docs/Formal_NORA_constitution.md` | Конституция NORA v1.0 — принципы, cognition, memory, retrieval, reasoning, governance |
 | `docs/NORA_Router_Engine_Architecture.md` | Архитектура Router Engine — когнитивный маршрутизатор для LirAgent |
 | `docs/nora_skill_dsl_specification.md` | Skill DSL — формальный язык описания навыков для NORA/LirAgent |
 | `docs/nora_trajectory_schema_architecture.md` | Trajectory Schema — модель жизненного цикла reasoning-path |
 | `docs/production-grade_system_prompt.md` | System Prompt продакшен-уровня для LirAgent |
 | `docs/Prolog_laws.md` | Конституционные законы NORA в формате Prolog для валидации |
+| `docs/Execution FSM.md` | Execution FSM — конечный автомат выполнения, protocol lock, вложенные FSM |
+| `docs/NORA_Checkpoint_Engine.md` | Checkpoint Engine — механический позвоночник runtime, барьерные чекпоинты |
+| `docs/NORA_anti-rationalization_runtime.md` | Anti-Rationalization Runtime (ARR) — принудительная проверка claims и артефактов |
+| `docs/REPAIR subsystem.md` | REPAIR Subsystem — автономное восстановление, классификация ошибок, метрики |
+| `docs/cat_seed persistence model.md` | Cat/Seed Persistence Model — механизм выживания памяти, poison-маркеры |
+| `docs/deterministic execution graph.md` | Deterministic Execution Graph — граф выполнения, graph_hash, replay |
+| `docs/memory database schema.md` | Memory Database Schema — схема БД памяти, таблицы, индексы |
+| `docs/planner-executor architecture.md` | Planner/Executor Architecture — разделение планирования и исполнения |
+| `docs/runtime validation pipeline.md` | Runtime Validation Pipeline — конвейер валидации, hallucination detection |
+| `docs/skill promotion algorithm.md` | Skill Promotion Algorithm — многофакторный промоушен, replay consistency |
 
 ---
 
@@ -449,13 +459,16 @@ ISC
 - ✅ **Repository cleanup**: 108 test/compiled files removed
 - ✅ **Tests**: comprehensive test suite passes
 - 📦 **Documentation**: updated (this file)
+- 📄 **10 новых архитектурных документов**: Execution FSM, Checkpoint Engine, ARR, REPAIR Subsystem, Cat/Seed, DEG, Memory Schema, Planner/Executor, Validation Pipeline, Skill Promotion
+- 🔄 **MainArchitecture21.md v2.1a**: L5.5/L5.7 слои, Planner/Executor, REPAIR, ARR, changelog
 
 ### Commit History
+- `63d6dd6` - Add L0-L7 architectural layer markup for 44 rules
+- `7feae99` - Add detailed REPAIR Subsystem section (2.6) with error classification, pseudocode, and metrics
+- `dbed6f6` - Update MainArchitecture21.md
+- `034c448` - Update commit history: add MainArchitecture21.md v2.1 update
 - `a5b4d38` - Update MainArchitecture21.md: v2.1 Cognitive Runtime Specification, add L0-L7 architectural layers
 - `5dfa9d5` - Add documentation index table to README
 - `1f4f43e` - Add scratch folder and 'never delete, only scratch' rule
 - `f965869` - Rename Architecture21.md to MainArchitecture21.md
 - `60d1974` - Add NORA architecture documentation suite
-- `fef0b9b` - Extend waitingForFeedback state to accept commands
-- `eb206de` - Update readme.md
-- `435dc61` - Update README: add /learn to command table, preserve Infostart link
