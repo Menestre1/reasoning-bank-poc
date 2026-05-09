@@ -384,6 +384,7 @@ Output
 # 15. Changelog
 
 - **v2.1** – добавлены trajectory, skill DSL, router, repair, reflection, execution FSM, интеграция всех компонентов.
+- **v2.1a** - Added detailed REPAIR Subsystem section (2.6) with error classification, repair algorithm pseudocode, and metrics.
 - **v2.0** – исходная версия `MainArchitecture21.md`.
 
 ===================================================
@@ -486,6 +487,45 @@ Output
 
 Любое нарушение → остановка выполнения → переход в REPAIR.
 
+
+[//]: # (History: REPAIR Subsystem v2.1a — added 2026-05-09. Full error classification table, repair algorithm pseudocode, and MTTR/Success Rate metrics.)
+
+### 2.6 REPAIR Subsystem (автономное восстановление)
+
+**Назначение:** перехватывать ошибки (law violations, tool failures, hallucinations, timeouts и т.д.) и пытаться восстановить выполнение без участия пользователя, если это возможно.
+
+**Место в архитектуре:** часть L6 (Self‑Check / Validation) и Execution FSM. REPAIR активируется при переходе из состояния FAILURE или из любого этапа валидации.
+
+**Классификация ошибок по ремонтопригодности:**
+
+| Тип ошибки | Можно ли отремонтировать автоматически? | Стратегия ремонта |
+|------------|------------------------------------------|-------------------|
+| Hallucination (выдуманный API) | ✅ Да | Переформулировать запрос, ограничить контекст, запросить верификацию |
+| Contamination (смешение языков) | ✅ Да | Очистить контекст, переключить домен |
+| Tool failure (команда не выполнена) | ⚠️ Частично | Повторить (retry), сменить аргументы, запросить альтернативный инструмент |
+| Timeout | ✅ Да | Разбить задачу на части, использовать асинхронный режим |
+| Law violation (нарушение конституции) | ❌ Нет – остановка | Требуется вмешательство пользователя |
+| User negative feedback («нет») | ⚠️ Частично | Repair может предложить альтернативу, но не может гарантировать успех |
+
+**Алгоритм ремонта (псевдокод):**
+function repair(failure):
+if failure.type in AUTO_REPAIRABLE:
+strategy = select_repair_strategy(failure)
+fork new_trajectory from last_checkpoint
+apply(strategy)
+if repair_success:
+continue execution
+else:
+escalate_to_human()
+else:
+escalate_to_human()
+
+**Метрики REPAIR:**
+- Repair Success Rate (цель > 60%)
+- Mean Time to Repair (MTTR)
+- Количество каскадных ремонтов (ремонт, вызвавший другой ремонт)
+
+**Ограничения (PoC):** REPAIR в текущей реализации работает только для предопределённых сценариев (retry, очистка контекста). Для полноценной работы требуется обучение на историях успешных ремонтов.
 ---
 
 ## 3. Ключевые артефакты (вместо таблицы)
