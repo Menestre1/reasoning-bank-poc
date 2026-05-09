@@ -451,6 +451,7 @@ ISC
 - 📦 **Documentation**: updated (this file)
 
 ### Commit History
+- `a5b4d38` - Update MainArchitecture21.md: v2.1 Cognitive Runtime Specification, add L0-L7 architectural layers
 - `5dfa9d5` - Add documentation index table to README
 - `1f4f43e` - Add scratch folder and 'never delete, only scratch' rule
 - `f965869` - Rename Architecture21.md to MainArchitecture21.md
