@@ -419,6 +419,21 @@ class OllamaClient {
 
 ---
 
+## Документация
+
+| Файл | Описание |
+|------|----------|
+| `docs/LirAgent-Technical-Documentation.md` | Полная тех. документация LirAgent: архитектура, память, feedback loop, promotion, анти-паттерны |
+| `docs/MainArchitecture21.md` | 44 правила архитектуры LirAgent 2.0 — генетический код системы памяти |
+| `docs/Formal_NORA_constitution.md` | Конституция NORA v1.0 — принципы, cognition, memory, retrieval, reasoning, governance |
+| `docs/NORA_Router_Engine_Architecture.md` | Архитектура Router Engine — когнитивный маршрутизатор для LirAgent |
+| `docs/nora_skill_dsl_specification.md` | Skill DSL — формальный язык описания навыков для NORA/LirAgent |
+| `docs/nora_trajectory_schema_architecture.md` | Trajectory Schema — модель жизненного цикла reasoning-path |
+| `docs/production-grade_system_prompt.md` | System Prompt продакшен-уровня для LirAgent |
+| `docs/Prolog_laws.md` | Конституционные законы NORA в формате Prolog для валидации |
+
+---
+
 ## Лицензия
 
 ISC
