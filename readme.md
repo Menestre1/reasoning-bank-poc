@@ -451,7 +451,10 @@ ISC
 - 📦 **Documentation**: updated (this file)
 
 ### Commit History
-- `93edaf1` - Fix parseErrorCommand order in processMessage
-- `0ae68ac` - Add negative feedback with description on same line
-- `4c46ef5` - Fix model selection and restore working ReasoningBankSemantic.ts
-- `176d29d` - Fix skill promotion and tool list handling
+- `5dfa9d5` - Add documentation index table to README
+- `1f4f43e` - Add scratch folder and 'never delete, only scratch' rule
+- `f965869` - Rename Architecture21.md to MainArchitecture21.md
+- `60d1974` - Add NORA architecture documentation suite
+- `fef0b9b` - Extend waitingForFeedback state to accept commands
+- `eb206de` - Update readme.md
+- `435dc61` - Update README: add /learn to command table, preserve Infostart link
