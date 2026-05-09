@@ -31,3 +31,6 @@ tmp/
 
 # Environment
 .env
+
+# Scratch (history junk - tests, backups, diagnostics, old data)
+scratch/
