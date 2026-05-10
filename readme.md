@@ -483,11 +483,13 @@ ISC
 - ✅ **Streaming responses**: implemented (async generator + `--stream` flag)
 - ✅ **Multi-line input**: Пуск!/!go/send signal, /cancel, clipboard paste support
 - ✅ **Visual separators**: `=====` before response, `---` before feedback question
+- ✅ **Production-grade system prompt**: loaded from `docs/production-grade_system_prompt.md`, language consistency policy, critical rules, error handling on missing file
 - 📦 **Documentation**: updated (this file)
 - 📄 **10 новых архитектурных документов**: Execution FSM, Checkpoint Engine, ARR, REPAIR Subsystem, Cat/Seed, DEG, Memory Schema, Planner/Executor, Validation Pipeline, Skill Promotion
 - 🔄 **MainArchitecture21.md v2.1a**: L5.5/L5.7 слои, Planner/Executor, REPAIR, ARR, changelog
 
 ### Commit History
+- `f7ec9a8` - Production-grade system prompt: load from file, add language consistency policy, error handling
 - `53306d6` - Add streaming response support and multi-line input
 - `63d6dd6` - Add L0-L7 architectural layer markup for 44 rules
 - `7feae99` - Add detailed REPAIR Subsystem section (2.6) with error classification, pseudocode, and metrics
