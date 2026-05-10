@@ -7,7 +7,7 @@
 
 LLM-агент «Лирь» с семантической памятью, системой навыков, анти-паттернами и анализом 1С-конфигураций.
 
-**Полная техническая документация**: `docs/LirAgent-Technical-Documentation.md`
+**Полная техническая документация**: `docs/LirAgent-Technical-Documentation.md` — туда перенесены все детали: модель данных, архитектура ReasoningBank, HNSW/LRU/TTL, feedback loop, .env, scratch policy, рекомендации и полный индекс документов.
 
 ---
 
