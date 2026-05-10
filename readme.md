@@ -26,7 +26,11 @@ npm install -D typescript
 
 ### Запуск интерактивного чата
 ```bash
+# Обычный режим
 npx tsx chat.ts
+
+# Потоковый режим (токены выводятся по мере генерации)
+npx tsx chat.ts --stream
 ```
 
 ### Папка scratch
@@ -65,6 +69,13 @@ npx tsx chat.ts
 | `/learn` | Сохранить последний диалог как знание (навык) |
 | `/exit` | Выход |
 
+### Многострочный ввод
+| Сигнал | Действие |
+|--------|----------|
+| `Пуск!`, `/send`, `!go` | Отправить накопленный многострочный текст |
+| `/cancel`, `отмена` | Отменить ввод (очистить буфер) |
+| Пустая строка в начале | Игнорируется (повторный запрос ввода) |
+
 ### Команды обратной связи (в ответ на вопрос "Я справился?")
 | Команда | Действие |
 |---------|----------|
@@ -87,7 +98,7 @@ npx tsx chat.ts
 ## Архитектура
 
 ```
-Пользователь → LirAgent.processMessage()
+Пользователь → LirAgent.processMessage() / processMessageStream()
    │
    ├─ Проверка: "нет, <описание>" → parseErrorCommand() → handleErrorFeedback(description)
    │
@@ -98,9 +109,10 @@ npx tsx chat.ts
    ├─ Сохранение диалога (domain='dialogue', outcome='pending')
    │
    └─ recommendWithWarnings() → LLM генерация
-          ├─ HNSWBackend.search() → k ближайших соседей (O(log N))
-          ├─ LRUCache.get() → кэш повторяющихся запросов (TTL 60s)
-          ├─ enrichedPrompt → OllamaClient.chat() → ответ LLM
+           ├─ HNSWBackend.search() → k ближайших соседей (O(log N))
+           ├─ LRUCache.get() → кэш повторяющихся запросов (TTL 60s)
+           ├─ enrichedPrompt → OllamaClient.chat() / chatStream() → ответ LLM
+           └─ processMessageStream() → onChunk(токен) → потоковый вывод
 ```
 
 ### Компоненты
@@ -110,8 +122,8 @@ npx tsx chat.ts
 | `ReasoningBankSemantic` | `src/ReasoningBankSemantic.ts` | Ядро памяти: запись, поиск, предотвращение ошибок, feedback, TTL |
 | `HNSWBackend` | `src/HNSWBackend.ts` | HNSW-индекс для приближённого поиска ближайших соседей |
 | `LRUCache` | `src/LRUCache.ts` | LRU-кэш результатов поиска с TTL |
-| `OllamaClient` | `src/OllamaClient.ts` | Клиент Ollama: chat, listModels, ping, chatStream |
-| `LirAgent` | `src/LirAgent.ts` | Агент с памятью, выбором языка, feedback и переключением моделей |
+| `OllamaClient` | `src/OllamaClient.ts` | Клиент Ollama: chat, listModels, ping, chatStream (async generator) |
+| `LirAgent` | `src/LirAgent.ts` | Агент с памятью, выбором языка, feedback, переключением моделей и потоковой генерацией |
 | `IntentAnalyzer` | `src/tools/IntentAnalyzer.ts` | Семантический анализ: предложение инструментов |
 
 ---
@@ -373,6 +385,15 @@ class LirAgent {
     languageQuestion?: string;
   }>;
 
+  // Потоковая генерация (требует --stream)
+  processMessageStream(userInput: string, onChunk?: (chunk: string) => void): Promise<{
+    response: string;
+    fullPrompt: string;
+    warnings: ErrorWarning[];
+    action: 'respond' | 'learn_error' | 'record_success' | 'ask_language' | 'waiting_feedback';
+    languageQuestion?: string;
+  }>;
+
   // Переключение модели Ollama
   switchModel(newModel: string): Promise<{
     success: boolean;
@@ -402,7 +423,8 @@ class OllamaClient {
 
   listModels(): Promise<ModelInfo[]>;
   chat(messages: ChatMessage[], model?: string): Promise<string>;
-  chatStream(messages: ChatMessage[], onChunk: (chunk: string) => void, model?: string): Promise<void>;
+  chatStream(messages: ChatMessage[], options?: { model?: string; temperature?: number; signal?: AbortSignal }): AsyncGenerator<string>;
+  chatStreamCallback(messages: ChatMessage[], onChunk: (chunk: string) => void, model?: string): Promise<void>;
   ping(model?: string): Promise<boolean>;
 }
 ```
@@ -411,7 +433,7 @@ class OllamaClient {
 
 ## Рекомендации по развитию
 
-1. **Streaming-ответы** — использовать `chatStream()` для потоковой генерации ответов.
+1. ~~**Streaming-ответы** — использовать `chatStream()` для потоковой генерации ответов.~~ ✅ Реализовано (async generator + `--stream`)
 2. **Мониторинг** — добавить метрики (latency поиска, hit rate кэша, количество ошибок) через Prometheus.
 3. **Автоклассификация ошибок** — классификатор на основе эмбеддингов для автоматического определения типа ошибки.
 4. **Масштабирование** — протестировать на 50k–100k записей; при необходимости перейти на `sqlite-vec` или `ruvector`.
@@ -458,11 +480,15 @@ ISC
 - ✅ **Negative feedback with description**: implemented (new feature)
 - ✅ **Repository cleanup**: 108 test/compiled files removed
 - ✅ **Tests**: comprehensive test suite passes
+- ✅ **Streaming responses**: implemented (async generator + `--stream` flag)
+- ✅ **Multi-line input**: Пуск!/!go/send signal, /cancel, clipboard paste support
+- ✅ **Visual separators**: `=====` before response, `---` before feedback question
 - 📦 **Documentation**: updated (this file)
 - 📄 **10 новых архитектурных документов**: Execution FSM, Checkpoint Engine, ARR, REPAIR Subsystem, Cat/Seed, DEG, Memory Schema, Planner/Executor, Validation Pipeline, Skill Promotion
 - 🔄 **MainArchitecture21.md v2.1a**: L5.5/L5.7 слои, Planner/Executor, REPAIR, ARR, changelog
 
 ### Commit History
+- `53306d6` - Add streaming response support and multi-line input
 - `63d6dd6` - Add L0-L7 architectural layer markup for 44 rules
 - `7feae99` - Add detailed REPAIR Subsystem section (2.6) with error classification, pseudocode, and metrics
 - `dbed6f6` - Update MainArchitecture21.md
