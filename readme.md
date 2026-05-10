@@ -484,6 +484,7 @@ ISC
 - ✅ **Multi-line input**: Пуск!/!go/send signal, /cancel, clipboard paste support
 - ✅ **Visual separators**: `=====` before response, `---` before feedback question
 - ✅ **Production-grade system prompt**: loaded from `docs/production-grade_system_prompt.md`, language consistency policy, critical rules, error handling on missing file
+- ✅ **Patient Knowledge Base**: separate SQLite DB (`patient_kb.db`), auto-saves code blocks from user messages, injects recent code into LLM context
 - 📦 **Documentation**: updated (this file)
 - 📄 **10 новых архитектурных документов**: Execution FSM, Checkpoint Engine, ARR, REPAIR Subsystem, Cat/Seed, DEG, Memory Schema, Planner/Executor, Validation Pipeline, Skill Promotion
 - 🔄 **MainArchitecture21.md v2.1a**: L5.5/L5.7 слои, Planner/Executor, REPAIR, ARR, changelog

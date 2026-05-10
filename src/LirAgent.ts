@@ -17,6 +17,7 @@ import { ToolOrchestrator } from './tools/ToolOrchestrator.js';
 import { ToolExecutor } from './tools/ToolExecutor.js';
 import { ToolIntegration } from './tools/ToolIntegration.js';
 import { AgentToolDialog } from './tools/AgentToolDialog.js';
+import { PatientKnowledgeBase } from './PatientKnowledgeBase.js';
 import { spawn } from 'child_process';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -76,6 +77,7 @@ export class LirAgent {
   private toolExecutor?: ToolExecutor;
   private toolIntegration?: ToolIntegration;
   private agentToolDialog?: AgentToolDialog;
+  private patientKB: PatientKnowledgeBase;
 
   constructor(options: {
     dbPath: string;
@@ -84,8 +86,11 @@ export class LirAgent {
     llmModel?: string;
     temperature?: number;
     contextLength?: number;
+    patientKbPath?: string;
   }) {
     this.dbPath = options.dbPath;
+
+    this.patientKB = new PatientKnowledgeBase(options.patientKbPath || './patient_kb.db');
 
     this.memory = new ReasoningBankSemantic({
       dbPath: options.dbPath,
@@ -714,6 +719,19 @@ export class LirAgent {
     const language = this.session.lastDetectedLanguage;
     this.session.lastUserInput = userInput;
 
+    // Save any code blocks from user input to patient knowledge base
+    const codeBlocks = this.extractCodeBlocks(userInput);
+    if (codeBlocks.length > 0) {
+      const patientProfile = this.session.agentId || 'default';
+      for (const block of codeBlocks) {
+        try {
+          await this.patientKB.saveCode(patientProfile, block.code, block.language, 'user_message');
+        } catch {
+          // silently ignore save errors
+        }
+      }
+    }
+
     const knowledgeResult = await this.searchKnowledge(userInput);
 
     const dialogueId = `dialogue-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -748,6 +766,14 @@ export class LirAgent {
       fullSystemPrompt += `\n\n⚠️ ВНИМАНИЕ: Обнаружены негативные паттерны! НЕ используй информацию, которая приводила к ошибкам: ${enriched.warnings.map(w => w.error_type).join(', ')}. Измени подход!`;
     } else if (knowledgeResult.bestScore >= 0.6 && knowledgeResult.content) {
       fullSystemPrompt += `\n\nYou are Лирь. Answer the question using ONLY the following information (do not add your own explanations):\n${knowledgeResult.content}\n\nEnd of knowledge.`;
+    }
+
+    // Append patient's recent code to context
+    const patientProfile = this.session.agentId || 'default';
+    const recentCode = await this.patientKB.findRecentCode(patientProfile, 3);
+    if (recentCode.length > 0) {
+      const codeBlock = recentCode.map(c => `\`\`\`${c.language || ''}\n${c.content}\n\`\`\``).join('\n\n');
+      fullSystemPrompt += `\n\n## Recent code from this patient\n${codeBlock}`;
     }
 
     this.session.conversationHistory.push({ role: 'user', content: userInput });
@@ -991,6 +1017,19 @@ export class LirAgent {
 
     this.session.lastUserInput = userInput;
 
+    // Save any code blocks from user input to patient knowledge base
+    const codeBlocks = this.extractCodeBlocks(userInput);
+    if (codeBlocks.length > 0) {
+      const patientProfile = this.session.agentId || 'default';
+      for (const block of codeBlocks) {
+        try {
+          await this.patientKB.saveCode(patientProfile, block.code, block.language, 'user_message');
+        } catch {
+          // silently ignore save errors
+        }
+      }
+    }
+
     // Search knowledge base for how-to questions
     const knowledgeResult = await this.searchKnowledge(userInput);
 
@@ -1038,6 +1077,15 @@ export class LirAgent {
       console.log(`[LirAgent] Medium confidence knowledge (${knowledgeResult.bestScore.toFixed(3)}), using strict prompt`);
       fullSystemPrompt += `\n\nYou are Лирь. Answer the question using ONLY the following information (do not add your own explanations):\n${knowledgeResult.content}\n\nEnd of knowledge.`;
     }
+
+    // Append patient's recent code to context
+    const patientProfile = this.session.agentId || 'default';
+    const recentCode = await this.patientKB.findRecentCode(patientProfile, 3);
+    if (recentCode.length > 0) {
+      const codeBlock = recentCode.map(c => `\`\`\`${c.language || ''}\n${c.content}\n\`\`\``).join('\n\n');
+      fullSystemPrompt += `\n\n## Recent code from this patient\n${codeBlock}`;
+    }
+
     this.session.conversationHistory.push({ role: 'user', content: userInput });
 
     const messages: ChatMessage[] = [
@@ -1443,6 +1491,18 @@ export class LirAgent {
 
   private getLanguageOptions(): string {
     return `Выберите язык:\n1. 📦 1С (BSL)\n2. 🟨 JavaScript\n3. 💙 TypeScript\n4. 🐍 Python\n5. 🔵 Go\n6. 📄 Общий`;
+  }
+
+  private extractCodeBlocks(text: string): { code: string; language?: string }[] {
+    const regex = /```(\w*)\n([\s\S]*?)```/g;
+    const blocks: { code: string; language?: string }[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+      const lang = match[1] || undefined;
+      const code = match[2]!.trim();
+      if (code) blocks.push({ code, language: lang });
+    }
+    return blocks;
   }
 
   private buildSystemPrompt(memoryBlock: string, language: Language): string {
