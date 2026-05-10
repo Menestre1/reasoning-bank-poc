@@ -64,21 +64,27 @@ export class ConfigLoader {
     const meta = parsed?.MetaDataObject;
     if (!meta) return;
 
-    const objectType = meta['@_type'] || 'Unknown';
-    const uuid = meta['@_uuid'] || '';
-    const props = meta.Properties?.Property || [];
-    
+    // Find the object-type child (Catalog, Document, etc.)
+    const typeKey = Object.keys(meta).find(k => k !== '@_type' && k !== '@_uuid');
+    const obj = typeKey ? meta[typeKey] : null;
+    if (!obj) return;
+
+    const objectType = `1C.${typeKey}`;
+    const uuid = obj['@_uuid'] || meta['@_uuid'] || '';
+    const props = obj.Properties || {};
+
     const getProp = (name: string): string => {
-      if (Array.isArray(props)) {
-        const prop = props.find((p: any) => p['@_Name'] === name);
-        return prop?.['#text'] || '';
-      } else {
-        return props['@_Name'] === name ? (props['#text'] || '') : '';
-      }
+      const val = props[name];
+      if (typeof val === 'string') return val;
+      if (val && typeof val === 'object') return val['#text'] || '';
+      return '';
     };
 
     const name = getProp('Name');
-    if (!name) return;
+    if (!name) {
+      console.log(`[ConfigLoader] Skipping ${filePath}: no Name in properties (keys=${Object.keys(props).join(',')})`);
+      return;
+    }
 
     const synonym = getProp('Synonym');
     let moduleText = getProp('Module') || '';
