@@ -554,6 +554,8 @@ ISC
 - 🔄 **MainArchitecture21.md v2.1a**: L5.5/L5.7 слои, Planner/Executor, REPAIR, ARR, changelog
 
 ### Commit History
+- `70dcf00` - Update README: document 1C config loading, PatientKB, tests, new commands
+- `727dbea` - ConfigLoader: load BSL from Forms/*/Ext/Form/Module.bsl, add LIKE fallback, fix tokenizer
 - `f7ec9a8` - Production-grade system prompt: load from file, add language consistency policy, error handling
 - `53306d6` - Add streaming response support and multi-line input
 - `63d6dd6` - Add L0-L7 architectural layer markup for 44 rules
