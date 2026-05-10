@@ -2,6 +2,7 @@
 import { LirAgent } from './src/LirAgent.js';
 import { ask } from './src/tools/ToolExecutor.js';
 import * as readline from 'readline';
+import * as fs from 'fs';
 
 const PROMPTS = {
   help: `
@@ -49,12 +50,20 @@ async function main() {
   console.log(`🤖 Агент Лирь — с авто-опросом после ответа${useStreaming ? ' (streaming)' : ''}`);
   console.log('==================================================\n');
 
+  let systemPrompt: string;
+  try {
+    systemPrompt = fs.readFileSync('docs/production-grade_system_prompt.md', 'utf8');
+  } catch {
+    console.error('\n❌ Файл docs/production-grade_system_prompt.md не найден.');
+    console.error('   Убедитесь, что репозиторий клонирован полностью или файл существует.');
+    process.exit(1);
+  }
+  console.log(`📄 System prompt loaded (${systemPrompt.length} bytes)`);
+
   const agent = new LirAgent({
     dbPath: './agentdb.db',
     agentId: 'lir',
-    systemPrompt: `Ты — агент Лирь, специалист по 1С:Предприятие.
-Ты помогаешь анализировать конфигурации 1С, искать проблемы в коде и оптимизировать работу.
-Отвечай кратко, по делу, на русском языке.`,
+    systemPrompt,
   });
 
   await agent.seedTools();
