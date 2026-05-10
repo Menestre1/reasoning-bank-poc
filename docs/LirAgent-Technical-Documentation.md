@@ -13,13 +13,15 @@ language: general
 3. [Core Components](#core-components)
 4. [Agent Behavior and Workflow](#agent-behavior-and-workflow)
 5. [Memory System (ReasoningBank)](#memory-system-reasoningbank)
-6. [Feedback Loop](#feedback-loop)
-7. [Experience-to-Skill Promotion](#experience-to-skill-promotion)
-8. [Anti-Pattern System (Warnings)](#anti-pattern-system-warnings)
-9. [Tool System](#tool-system)
-10. [Knowledge Base](#knowledge-base)
-11. [Data Models](#data-models)
-12. [Key Algorithms](#key-algorithms)
+6. [Patient Knowledge Base](#patient-knowledge-base)
+7. [Feedback Loop](#feedback-loop)
+8. [Experience-to-Skill Promotion](#experience-to-skill-promotion)
+9. [Anti-Pattern System (Warnings)](#anti-pattern-system-warnings)
+10. [Tool System](#tool-system)
+11. [Knowledge Base](#knowledge-base)
+12. [Data Models](#data-models)
+13. [Key Algorithms](#key-algorithms)
+14. [1C Configuration Analysis Modules](#1c-configuration-analysis-modules)
 
 ---
 
@@ -34,6 +36,14 @@ LirAgent (codenamed "Лирь") is an intelligent conversational agent that lear
 
 **Key Innovation**: The agent uses a `consecutive_successes` counter that must reach 3 for an experience to become a "skill", preventing premature promotion of unproven patterns.
 
+**Major additions since v1.0**:
+- **Patient Knowledge Base** — separate SQLite database (`patient_kb.db`) that automatically saves code blocks from user messages and injects recent code into LLM context
+- **1C Configuration Search** — `ConfigStorage` with FTS5 full-text search + LIKE fallback, enabling `/search-code` and `/semantic-search` commands
+- **ConfigLoader improvements** — parses XML metadata and loads BSL modules from `Ext/` and `Forms/*/Ext/Form/` directories
+- **Production-grade system prompt** — loaded from external file (`docs/production-grade_system_prompt.md`) with LANGUAGE CONSISTENCY POLICY and critical rules
+- **Streaming mode** — `--stream` flag for token-by-token output with visual indicator
+- **15 automated tests** — vitest suite covering PatientKB, code extraction, and `/next` command
+
 ---
 
 ## Architecture Overview
@@ -41,28 +51,40 @@ LirAgent (codenamed "Лирь") is an intelligent conversational agent that lear
 ### System Components
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         User Interface                          │
-│                    (chat.ts - entry point)                     │
-└───────────────────────────┬─────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                         User Interface                           │
+│                    (chat.ts - entry point)                      │
+└───────────────────────────┬──────────────────────────────────────┘
                             │
                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     LirAgent (Main Orchestrator)               │
-│  - Conversation flow management                                │
-│  - Feedback processing (да/нет/отмена)                        │
-│  - Language detection                                         │
-│  - Session state management                                   │
-└────────────┬────────────────────┬──────────────────┬───────────┘
-             │                    │                  │
-             ▼                    ▼                  ▼
-┌─────────────────────┐  ┌──────────────┐  ┌─────────────────┐
-│ ReasoningBank       │  │ OllamaClient │  │ ToolIntegration │
-│ Semantic            │  │ (LLM API)    │  │ (Tool Layer)    │
-│ - Vector search     │  │              │  │ - Tool registry │
-│ - Experience store  │  └──────────────┘  │ - Intent analysis│
-│ - Feedback handling │                    │ - Execution      │
-└─────────────────────┘                    └─────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                     LirAgent (Main Orchestrator)                │
+│  - Conversation flow management                                 │
+│  - Feedback processing (да/нет/отмена)                         │
+│  - Language detection                                          │
+│  - Session state management                                    │
+│  - extractCodeBlocks() — auto-save patient code                │
+│  - PatientKB integration (saveCode + findRecentCode + search)  │
+│  - ConfigLoader integration (/load-config, /search-code)       │
+└──────┬─────────────┬────────────────┬────────────────┬──────────┘
+       │             │                │                │
+       ▼             ▼                ▼                ▼
+┌──────────────┐ ┌──────────┐ ┌──────────────┐ ┌──────────────────┐
+│ ReasoningBank│ │Ollama    │ │Patient       │ │ConfigStorage     │
+│ Semantic     │ │Client    │ │KnowledgeBase │ │(config_objects)  │
+│ - Vector     │ │(LLM API) │ │(patient_kb)  │ │ - FTS5 (unicode61)│
+│   search     │ │          │ │ - saveCode   │ │ - LIKE fallback  │
+│ - Experience │ │          │ │ - searchCode │ │ - getObjectCount │
+│   store      │ │          │ │ - clearProfile│ │ - getSampleNames  │
+│ - Feedback   │ │          │ │ - findRecent │ │                  │
+│ - Promotion  │ │          │ │              │ │ ┌──────────────┐ │
+└──────────────┘ └──────────┘ └──────────────┘ │ │ ConfigLoader  │ │
+                                                │ │(parse 1C XML) │ │
+                                                │ │ - Ext/*.bsl   │ │
+                                                │ │ - Forms/*/Ext/│ │
+                                                │ │   Form/Module │ │
+                                                │ └──────────────┘ │
+                                                └──────────────────┘
 ```
 
 ### File Structure
@@ -73,7 +95,12 @@ LirAgent (codenamed "Лирь") is an intelligent conversational agent that lear
 | Memory System | `src/ReasoningBankSemantic.ts` | Experience storage and retrieval (596 lines) |
 | LLM Client | `src/OllamaClient.ts` | Ollama API integration |
 | Tool System | `src/tools/` | Tool registry, intent analysis, execution |
-| Config Analysis | `src/Config*.ts`, `src/Dependency*.ts` | 1С configuration processing |
+| Patient Knowledge Base | `src/PatientKnowledgeBase.ts` | Separate memory for patient code blocks (auto-save, LIKE-search, `/next`) |
+| Config Storage | `src/ConfigStorage.ts` | FTS5-indexed `config_objects` table for 1C configuration search |
+| Config Loader | `src/ConfigLoader.ts` | Parses 1C XML metadata + loads BSL from Ext/ and Forms/ |
+| Config Analysis | `src/Dependency*.ts` | 1С configuration dependency graph |
+| Performance | `src/Performance*.ts` | Performance measurement loading |
+| Comparison | `src/ConfigComparator.ts` | Config version comparison (diff) |
 
 ---
 
@@ -108,11 +135,17 @@ interface AgentSession {
 ```
 
 **Key Methods**:
-- `processMessage(userInput)` - Main entry point for user input
+- `processMessage(userInput)` - Main entry point for user input (sync mode)
+- `processMessageStream(userInput, onChunk)` - Streaming version (async generator)
 - `processFeedback(userInput)` - Handle "да"/"нет" responses
 - `handleSuccessFeedback()` - Process positive feedback
 - `handleErrorFeedback(errorType)` - Process negative feedback
 - `processWithLanguage(userInput, language)` - Generate response with language context
+- `extractCodeBlocks(text)` - Extract fenced/indented code blocks from text, save to PatientKB
+- `handleSearchCode(args)` - Search `ConfigStorage` via FTS5 with LIKE fallback
+- `handleSemanticSearch(args)` - Search `ConfigStorage` via ReasoningBank + FTS
+- `loadConfigInBackground(configPath)` - Load 1C configuration asynchronously
+- `handleNextCommand()` - Clear patient knowledge for current profile
 
 ---
 
@@ -210,13 +243,32 @@ Set session.waitingForFeedback = true
 
 ### Prompt Building Logic (`src/LirAgent.ts:1025-1036`)
 
-The system prompt is constructed with three components:
+The system prompt is constructed from four components:
 
-1. **Base system prompt** - Agent identity and instructions
-2. **Language instruction** - Specific syntax rules for 1С/JS/TS/Python/Go
-3. **Memory block** - Contains:
+1. **Production-grade base prompt** — loaded from `docs/production-grade_system_prompt.md` at startup
+2. **Language instruction** — Specific syntax rules for 1С/JS/TS/Python/Go
+3. **Patient code context** — Last 3 code blocks from `PatientKnowledgeBase.findRecentCode()`
+4. **Memory block** — Contains:
    - Warnings from failed experiences (BLOCKS knowledge if present)
    - Knowledge base content (ONLY if no warnings)
+
+**Production-grade system prompt** (`docs/production-grade_system_prompt.md`, 347 lines):
+- Includes LANGUAGE CONSISTENCY POLICY — the agent **must** match the user's language (Russian/English)
+- Defines anti-pattern policies: эхолалия, парафазия, контаминация, галлюцинация
+- Sets context priority order: warnings > skills > successful experiences > general knowledge
+- Includes failure prevention checklist before every response
+
+```typescript
+// System prompt loading in chat.ts
+const systemPromptFile = 'docs/production-grade_system_prompt.md';
+let systemPrompt: string;
+try {
+  systemPrompt = fs.readFileSync(systemPromptFile, 'utf-8');
+} catch (err) {
+  console.error(`[ERROR] Cannot read system prompt file: ${systemPromptFile}`);
+  process.exit(1);
+}
+```
 
 **Critical Logic** (lines 722-731):
 ```typescript
@@ -392,6 +444,111 @@ User says "отмена" (cancel)
    - `consecutive_successes`: Consecutive successes (reset on failure, used for skill promotion)
 
 3. **Duplicate prevention**: For dialogues, exact `task` match prevents duplicates. For other domains, `findSimilarExisting()` with threshold 0.7-0.85 prevents semantic duplicates.
+
+---
+
+## Patient Knowledge Base
+
+### Overview
+
+**File**: `src/PatientKnowledgeBase.ts` (79 lines)
+
+Patient Knowledge Base (`PatientKnowledgeBase`) is a **separate memory store** for code blocks that the user shares during conversations. Unlike `ReasoningBankSemantic` (which stores agent experiences), PatientKB holds **the user's own code** — code they ask about, debug, or reference.
+
+Key differences from ReasoningBank:
+| Aspect | ReasoningBank | PatientKB |
+|--------|--------------|-----------|
+| Database | `agentdb.db` | `patient_kb.db` |
+| Table | `rb_experiences` | `patient_knowledge` |
+| Stores | Agent experiences (dialogues, tools) | User's code blocks |
+| Search | Vector (cosine similarity) | LIKE on content |
+| Retention | TTL-based (90 days) | Permanent until `/next` |
+| Memory mechanisms | TTL, cats, promotion, skills | None (simple append-only) |
+
+### Schema
+
+```sql
+CREATE TABLE IF NOT EXISTS patient_knowledge (
+  id TEXT PRIMARY KEY,
+  patient_profile TEXT NOT NULL,
+  content TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  language TEXT,
+  source TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_pk_profile ON patient_knowledge(patient_profile);
+CREATE INDEX IF NOT EXISTS idx_pk_hash ON patient_knowledge(content_hash);
+```
+
+### Core Methods
+
+#### `saveCode(patientProfile, code, language?, source?)`
+
+Automatically called by `LirAgent.extractCodeBlocks()` during `processMessage()` / `processMessageStream()`.
+
+**Deduplication**: Uses SHA-256 hash of `code` — if the same code block was already saved for this profile, it is silently skipped:
+```typescript
+const contentHash = createHash('sha256').update(code).digest('hex');
+const existing = this.db.prepare(
+  'SELECT id FROM patient_knowledge WHERE patient_profile = ? AND content_hash = ?'
+).get(patientProfile, contentHash);
+if (existing) return;
+```
+
+#### `findRecentCode(patientProfile, limit)`
+
+Returns the most recent `limit` code blocks for context injection. Called by `processMessage()` to inject the last 3 blocks into the LLM prompt.
+
+#### `searchCode(patientProfile, query, limit)`
+
+LIKE-based search that splits the query into words > 2 characters:
+```typescript
+const terms = query.split(/\s+/).filter(t => t.length > 2);
+const conditions = terms.map(() => 'content LIKE ?');
+// WHERE patient_profile = ? AND (content LIKE '%word1%' OR content LIKE '%word2%')
+```
+
+Used by the `/search-code` command to find relevant patient code.
+
+#### `clearProfile(patientProfile)`
+
+Called by the `/next` command — **deletes all patient knowledge** for the current profile. This is the only way to clear patient memory (no TTL).
+
+### Integration in LirAgent
+
+During `processMessage()` and `processMessageStream()` (in `LirAgent.ts`):
+
+```
+processMessage(userInput)
+  │
+  ├─▶ extractCodeBlocks(userInput) → codeBlocks[]
+  │       For each block:
+  │       - patientKB.saveCode(profile, code, language)
+  │
+  ├─▶ patientKB.findRecentCode(profile, 3)
+  │       → injects last 3 code blocks into LLM context
+  │
+  ├─▶ (later) patientKB.searchCode(profile, query)
+  │       → used by /search-code command
+  │
+  └─▶ /next → patientKB.clearProfile(profile)
+```
+
+### extractCodeBlocks Logic
+
+**Location**: `LirAgent.ts` method
+
+Extracts code blocks from user messages using regex:
+```typescript
+const blockRegex = /```(\w*)\n([\s\S]*?)```|(^ {4,}[^\n]+(?:\n {4,}[^\n]+)*)/gm;
+```
+
+Matches two patterns:
+1. Fenced code blocks: ` ```language ... ``` `
+2. Indented code blocks (4+ spaces)
+
+Each extracted block is saved to PatientKB with its language (if detected).
 
 ---
 
@@ -675,7 +832,58 @@ User: "extract my code from 1.txt"
 
 ---
 
-## Knowledge Base
+## Chat Interface Features
+
+### Streaming Mode (`--stream`)
+
+**File**: `chat.ts` (entry point)
+
+When launched with `--stream` flag, the chat uses `processMessageStream()` instead of `processMessage()`:
+
+```bash
+npx tsx chat.ts --stream
+```
+
+**Indicator**: A `⏳` character is displayed while waiting for the first token. When streaming begins, `⏳` is erased and tokens are output one by one:
+
+```
+💬 Вы: как начать транзакцию в 1С?
+⏳                                ← visible during LLM latency
+НачатьТранзакцию()...             ← tokens arrive one by one
+```
+
+**Implementation** (simplified):
+```typescript
+if (args.stream) {
+  process.stdout.write('\n⏳ ');  // show spinner
+  let started = false;
+  const result = await agent.processMessageStream(input, (chunk) => {
+    if (!started) { process.stdout.write('\b \b'); started = true; }
+    process.stdout.write(chunk);
+  });
+}
+```
+
+### Multi-Line Input
+
+Users can paste or type multi-line input using these signals:
+
+| Signal | Action |
+|--------|--------|
+| `Пуск!`, `/send`, `!go` | Send accumulated multi-line text |
+| `/cancel`, `отмена` | Cancel input (clear buffer) |
+
+When the user enters text, it's accumulated in a buffer. A blank line (Enter on empty input) prompts for more input. The accumulated text is sent only when one of the "send" signals is received.
+
+This is particularly useful for pasting code blocks, error logs, or multi-line 1C module snippets.
+
+### Visual Separators
+
+| Element | Separator | Purpose |
+|---------|-----------|---------|
+| Before response | `=====` | Visually separates agent response from previous output |
+| Before feedback | `---` | Separates the "Я справился?" question from the response |
+| Input mode | Custom prompt | `💬 Вы: ` for normal input, multi-line mode has its own prompt |
 
 ### Knowledge vs. Dialogue Experiences
 
@@ -845,10 +1053,155 @@ This prevents creating duplicate dialogue entries for the same question.
 
 Although LirAgent is primarily a conversational agent with memory, it includes powerful utilities for 1C configuration analysis.
 
-### ConfigLoader (`src/ConfigLoader.ts`)
-- Parses 1C configuration XML export
-- Indexes module texts into `config_objects` table
-- Extracts object names, types, and parent relationships
+### ConfigStorage (`src/ConfigStorage.ts`) — New
+
+**Core storage** for loaded 1C configuration objects. Uses a dedicated SQLite table with FTS5 full-text search.
+
+```sql
+-- Main data table
+CREATE TABLE IF NOT EXISTS config_objects (
+  id TEXT PRIMARY KEY,
+  object_type TEXT NOT NULL,      -- e.g. '1C.Catalog', '1C.Document'
+  name TEXT NOT NULL,             -- object name (e.g. 'Номенклатура')
+  synonym TEXT,                   -- human-readable synonym
+  module_full TEXT,               -- full BSL module text
+  file_path TEXT,
+  size_bytes INTEGER,
+  hash TEXT,                      -- SHA-256 of module text
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- FTS5 virtual table for full-text search
+CREATE VIRTUAL TABLE IF NOT EXISTS config_objects_fts USING fts5(
+  name, module_full, tokenize = 'unicode61'
+);
+```
+
+**Key Methods**:
+- `saveObject(record)` — Insert/update object + sync FTS index
+- `searchByFTS(query, limit, exact)` — **Two-tier search**:
+  1. **FTS5** with `unicode61` tokenizer (handles Cyrillic, CamelCase, underscores)
+  2. **LIKE fallback** — if FTS returns 0 results: `WHERE name LIKE '%query%' OR module_full LIKE '%query%'`
+- `getObjectCount()` / `getSampleNames(limit)` — Diagnostics for the user
+- `getFullModuleTextForObject(objectName)` — Retrieve complete module source
+
+The `unicode61` tokenizer is chosen over `russian` because `russian` is not a built-in SQLite tokenizer — it requires an extension that may not be available. `unicode61` handles Unicode text including Cyrillic and is always available with FTS5.
+
+### ConfigLoader (`src/ConfigLoader.ts`) — Improved
+
+Parses 1C configuration XML export directories and loads BSL module files.
+
+**Supported object types** (detected by child element name under `<MetaDataObject>`):
+- `Catalog` — справочники
+- `Document` — документы
+- `DataProcessor` — обработки
+- `CommonModule` — общие модули
+- `Enum` — перечисления
+- `InformationRegister` — регистры сведений
+- `ChartOfCharacteristicTypes` — ПВХ
+- `EventSubscription` — подписки на события
+
+**XML Parsing Strategy** (critical for correctness):
+
+The 1C XML structure is:
+```xml
+<MetaDataObject>
+  <Catalog>
+    <Properties>
+      <Name>Номенклатура</Name>
+      <Synonym>Номенклатура</Synonym>
+    </Properties>
+  </Catalog>
+</MetaDataObject>
+```
+
+NOT this (which would be typical in other formats):
+```xml
+<MetaDataObject type="Catalog">
+  <Property Name="Name">Номенклатура</Property>
+</MetaDataObject>
+```
+
+The loader uses `fast-xml-parser` with `ignoreAttributes: false` and reads properties by tag name, not attribute.
+
+**BSL Module Loading** — Loads from multiple locations:
+
+1. **Ext/ directory** (object-level modules):
+   - `Ext/ObjectModule.bsl` — Object module
+   - `Ext/ManagerModule.bsl` — Manager module
+   - `Ext/Module.bsl` — Generic module (common modules)
+   - `Ext/RecordSetModule.bsl` — Record set module (registers)
+
+2. **Forms/ directory** (form modules):
+   - `Forms/<FormName>/Ext/Form/Module.bsl` — Form event handlers
+
+```typescript
+// Object-level modules
+const bslFiles = ['ObjectModule.bsl', 'ManagerModule.bsl', 'Module.bsl', 'RecordSetModule.bsl'];
+for (const bslName of bslFiles) {
+  const bslPath = extDir + '/' + bslName;
+  const bslContent = await this.fsReader.readFile(bslPath);
+  // Append to moduleText
+}
+
+// Form modules
+const formsDir = objDir + '/Forms';
+for (const entry of formEntries) {
+  const formBsl = formsDir + '/' + entry.name + '/Ext/Form/Module.bsl';
+  const bslContent = await this.fsReader.readFile(formBsl);
+  // Append with "// Form: <FormName>" header
+}
+```
+
+**Loading flow** (`loadDirectory()`, line 32):
+```
+loadDirectory(rootPath)
+  │
+  ├─▶ walkXmlFiles(rootPath) → list of .xml files
+  │
+  ├─▶ for each file (concurrent, concurrency = 10):
+  │     │
+  │     ▼
+  │   [processFile(filePath, rootPath)]
+  │     │
+  │     ├─▶ Parse XML with fast-xml-parser
+  │     ├─▶ Find object-type child (Catalog, Document, etc.)
+  │     ├─▶ Extract Name, Synonym from Properties
+  │     ├─▶ Load BSL from Ext/ (ObjectModule.bsl, ManagerModule.bsl, Module.bsl, RecordSetModule.bsl)
+  │     ├─▶ Load BSL from Forms/*/Ext/Form/Module.bsl
+  │     ├─▶ recordExperience() in ReasoningBank (for semantic search)
+  │     └─▶ saveObject() in ConfigStorage (for FTS search)
+  │
+  └─▶ Return { totalFiles, processed, errors, durationMs }
+```
+
+**Diagnostic output** during load:
+```
+[ConfigLoader] Loaded module for Номенклатура (1234 chars)
+[ConfigLoader] Progress: 100/200
+[ConfigLoader] Completed. Processed 200 files, 0 errors in 3200ms
+```
+
+**After load**, `/search-code` displays diagnostics:
+```
+[Search] DB has 200 config objects. Examples: Номенклатура, Документы, Обработки
+```
+
+### Search Code Command (`/search-code`)
+
+**Flow**:
+```
+/search-code <query>
+  │
+  ├─▶ ConfigStorage.searchByFTS(query)  ← FTS5 first
+  │     │
+  │     ├─▶ If results found → return { id, name, snippet, rank }
+  │     │
+  │     └─▶ If 0 results → LIKE fallback
+  │           WHERE name LIKE '%query%' OR module_full LIKE '%query%'
+  │
+  └─▶ For /semantic-search: also queries ReasoningBank semantic search
+```
 
 ### DependencyGraph + DependencyParser (`src/DependencyGraph.ts`, `src/DependencyParser.ts`)
 - **DependencyGraph**: Stores and queries object call dependencies in SQLite
@@ -990,12 +1343,15 @@ new LirAgent({
 
 ### Other Tables (1С Configuration Analysis)
 
-| Table | Purpose | Key Columns |
-|-------|---------|-------------|
-| `config_objects` | 1С configuration objects | `name`, `type`, `parent`, `module_text` |
-| `measurements` | Performance data | `object_name`, `method_name`, `duration_ms` |
-| `dependencies` | Object call graph | `caller`, `callee`, `call_type` |
-| `comparisons` | Config version diffs | `old_version`, `new_version`, `diff_summary` |
+| Table | Database File | Purpose | Key Columns |
+|-------|---------------|---------|-------------|
+| `rb_experiences` | `agentdb.db` | Agent experiences (dialogues, skills, errors) | `task`, `outcome`, `content`, `domain`, `error_type`, `embedding` |
+| `patient_knowledge` | `patient_kb.db` | Patient code blocks (saved from user messages) | `patient_profile`, `content`, `content_hash`, `language` |
+| `config_objects` | `agentdb.db` | 1С configuration objects | `name`, `object_type`, `module_full`, `file_path` |
+| `config_objects_fts` | `agentdb.db` | FTS5 index for config search | `name`, `module_full` (virtual FTS) |
+| `measurements` | `agentdb.db` | Performance data | `object_name`, `method_name`, `duration_ms` |
+| `dependencies` | `agentdb.db` | Object call graph | `caller`, `callee`, `call_type` |
+| `comparisons` | `agentdb.db` | Config version diffs | `old_version`, `new_version`, `diff_summary` |
 
 ---
 
@@ -1012,6 +1368,10 @@ new LirAgent({
 | **Warning** | A message generated from past failures to prevent repetition |
 | **Embedding** | Vector representation of text (384-dim hash-based, SHA-256 per token) |
 | **HNSW** | Hierarchical Navigable Small World (fast vector search algorithm) |
+| **Patient Knowledge Base** | Separate memory for user's code blocks (`patient_kb.db`, LIKE-search, cleared via `/next`) |
+| **ConfigStorage** | FTS5-indexed storage for 1C configuration objects with LIKE fallback |
+| **FTS5** | SQLite Full-Text Search engine (version 5), using `unicode61` tokenizer |
+| **LIKE fallback** | Fallback search using `WHERE name LIKE '%query%'` when FTS5 returns no results |
 
 ---
 
@@ -1038,8 +1398,8 @@ new LirAgent({
 
 ---
 
-**Document Version**: 1.1  
-**Last Updated**: 2026-05-03  
+**Document Version**: 1.2  
+**Last Updated**: 2026-05-10  
 **Maintainer**: LirAgent Development Team
 
 ---
@@ -1057,7 +1417,9 @@ new LirAgent({
 - `/model <name>` - Switch to specific model (e.g., `/model gemma4:26b`)
 
 ### 1C Configuration Analysis
-- `/load-config <path>` - Load 1C configuration XML export
+- `/load-config <path>` - Load 1C configuration XML export (parses XML + loads BSL from Ext/ and Forms/)
+- `/search-code <query>` - Search loaded config objects (FTS5 + LIKE fallback)
+- `/semantic-search <query>` - Search via LLM + ReasoningBank semantic search
 - `/build-graph` - Build object call graph
 - `/callers <object>` - Find who calls an object/method
 - `/callees <object>` - Find what an object/method calls
@@ -1067,6 +1429,10 @@ new LirAgent({
 - `/diff-module <object>` - Show module diff between versions
 - `/changed-objects [type]` - List changed objects
 - `/comparison-summary` - Summary of last comparison
+
+### Patient Knowledge Base
+- `/next` - Clear patient code memory (deletes all `patient_knowledge` for current profile)
+- Code blocks are extracted and saved **automatically** from every user message
 
 ### Tool Management
 - `/tools` - List available tools

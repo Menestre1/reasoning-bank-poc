@@ -1,502 +1,77 @@
 Проект разработан в рамках публикации на ![Логотип Инфостарт](https://infostart.ru/bitrix/templates/sandbox_empty/assets/tpl/abo/img/logo.svg)
 
-Ссылка на публикацию 
+Ссылка на публикацию
 [https://infostart.ru/1c/reports/2508153/](https://infostart.ru/1c/articles/2683130/)
- 
- # ReasoningBank PoC — Семантическая память для Lir Agent
 
-Система памяти как имя LLM-агента «Лирь» это геном, который не позволит системе врать себе, которая позволяет запоминать опыт, избегать повторения ошибок и автоматически закреплять успешные паттерны как навыки.
+# ReasoningBank PoC — Семантическая память для Lir Agent
+
+LLM-агент «Лирь» с семантической памятью, системой навыков, анти-паттернами и анализом 1С-конфигураций.
+
+**Полная техническая документация**: `docs/LirAgent-Technical-Documentation.md`
 
 ---
 
 ## Быстрый старт
 
-### Установка
 ```bash
-# Node.js 20+ (через fnm или напрямую)
-fnm install 20
-fnm use 20
-
-# Зависимости
+# Node.js 20+
 npm install
 
-# Опционально: TypeScript компилятор для продакшена
-npm install -D typescript
-```
-
-### Запуск интерактивного чата
-```bash
-# Обычный режим
+# Запуск чата
 npx tsx chat.ts
 
-# Потоковый режим (токены выводятся по мере генерации)
+# Потоковый режим
 npx tsx chat.ts --stream
 ```
 
-### Папка scratch
-Для временных файлов (тесты, бэкапы, диагностика, old data) используется папка `scratch/`. Она в `.gitignore` — файлы там не пушатся, но сохраняются локано на случай, если понадобится вспомнить результат прошлого теста.
+---
 
-### Загрузка и поиск 1С-конфигураций
+## Основные команды
 
-Агент умеет загружать XML-выгрузки конфигураций 1С (CFE) и искать по ним код:
+| Команда | Действие |
+|---------|----------|
+| `/help` | Справка |
+| `/models` | Список моделей Ollama |
+| `/model <имя>` | Сменить модель |
+| `/stats` | Статистика памяти |
+| `/learn` | Сохранить диалог как навык |
+| `/load-config <путь>` | Загрузить 1С-конфигурацию |
+| `/search-code <запрос>` | Поиск по объектам конфигурации |
+| `/next` | Очистить память пациента |
+| `/exit` | Выход |
 
-```bash
-# Загрузить конфигурацию
-/load-config test_config/cfe
+**Фидбек**: `да` / `нет` / `нет, <пояснение>` / `отмена`
 
-# Поиск по объектам (названиям и тексту модулей)
-/search-code Номенклатура
-
-# Поиск кода BSL
-/search-code НачатьТранзакцию
-```
-
-**Структура загрузки:**
-- Парсинг XML метаданных: `Catalog`, `Document`, `DataProcessor`, `CommonModule`, `Enum`, `InformationRegister`, `ChartOfCharacteristicTypes`, `EventSubscription`
-- Чтение BSL-модулей из `Ext/ObjectModule.bsl`, `Ext/ManagerModule.bsl`, `Ext/Module.bsl`, `Ext/RecordSetModule.bsl`
-- Чтение модулей форм: `Forms/*/Ext/Form/Module.bsl`
-- Хранение в SQLite с FTS5-индексом (`unicode61` tokenizer)
-
-**Поиск:**
-1. FTS5-поиск по имени и полному тексту модуля
-2. Если FTS5 не дал результатов — LIKE-fallback (`WHERE name LIKE '%query%' OR module_full LIKE '%query%'`)
-3. Диагностика: выводится количество объектов в БД и примеры имён
-
-### Patient Knowledge Base
-
-Отдельное хранилище кода пациента (не путать с ReasoningBank):
-
-- База данных: `patient_kb.db` (отдельный файл)
-- Автоматически извлекает блоки кода из сообщений пользователя
-- Последние 3 блока кода подгружаются в контекст LLM при каждом запросе
-- LIKE-поиск по содержимому блоков (разбивка запроса на слова > 2 символов)
-- Очистка: `/next`
-
-### Тесты
-
-```bash
-# Установка vitest (если ещё не)
-npm install
-
-# Запуск тестов
-npm test
-# или
-npx vitest run
-```
-
-Suite: 15 тестов:
-- `PatientKnowledgeBase.test.ts` (7) — saveCode, findRecentCode, searchCode, clearProfile, countByProfile
-- `extractCodeBlocks.test.ts` (5) — извлечение кода из текста сообщений
-- `nextCommand.test.ts` (3) — очистка памяти пациента
-
-TypeScript: `npx tsc --noEmit` — 0 ошибок.
-
-### Правило работы с помойкой
-**Никогда не удалять файлы — только помещать в `scratch/`.**
-
-Это правило действует всегда и для всех файлов:
-- Тесты (`test-*.ts`, `test-*.mjs`)
-- Бэкапы и `.backup`
-- Диагностические файлы (`.d.ts.map`, логи)
-- Старые тестовые данные
-- Скомпилированные файлы, которые не нужны в репозитории
-
-Если файл не должен пушиться — он перемещается в `scratch/`, а не удаляется. Это позволяет сохранить историю и контекст на случай, если понадобится вспомнить результат прошлого теста или отключённой диагностики.
-
-При старте агент:
-1. Показывает список доступных моделей Ollama
-2. Автоматически выбирает `gemma4:26b-a4b-it-q4_K_M` (если доступна)
-3. Сеидит инструменты и базу знаний
+**Многострочный ввод**: `Пуск!` / `!go` — отправить, `/cancel` — отмена
 
 ---
 
-## Команды
+## Ключевые возможности
 
-### Основные команды чата
-| Команда | Действие |
-|---------|----------|
-| `/help` | Показать справку |
-| `/models` | Список всех доступных моделей Ollama |
-| `/model <имя>` | Сменить модель (например: `/model llama3.2:latest`) |
-| `/tools` | Список всех инструментов (через базу знаний) |
-| `/stats` | Статистика памяти |
-| `/lang` | Выбрать язык программирования |
-| `/learn` | Сохранить последний диалог как знание (навык) |
-| `/load-config <путь>` | Загрузить выгрузку 1С-конфигурации (XML) в БД |
-| `/search-code <запрос>` | Поиск по загруженным объектам конфигурации (FTS5 + LIKE fallback) |
-| `/semantic-search <запрос>` | Поиск по загруженным объектам через LLM + FTS (альтернативный) |
-| `/next` | Очистить память пациента (patient_kb) |
-| `/exit` | Выход |
-
-### Многострочный ввод
-| Сигнал | Действие |
-|--------|----------|
-| `Пуск!`, `/send`, `!go` | Отправить накопленный многострочный текст |
-| `/cancel`, `отмена` | Отменить ввод (очистить буфер) |
-| Пустая строка в начале | Игнорируется (повторный запрос ввода) |
-
-### Команды обратной связи (в ответ на вопрос "Я справился?")
-| Команда | Действие |
-|---------|----------|
-| `да`, `молодец`, `хорошо` | Положительный фидбек (+1 к счётчику) |
-| `нет, <описание>` | **Новое!** Отрицательный фидбек с пояснением в одной строке |
-| `нет` | Отрицательный фидбек (покажет список типов ошибок) |
-| `1`-`4` или название | Выбор типа ошибки (эхолалия, парафазия, контаминация, галлюцинация) |
-
-### Пример новой фичи: фидбек с пояснением
-```
-💬 Вы: как начать транзакцию в 1С?
-🤖 Лирь: Используйте НачатьТранзакцию()...
-
-💬 Вы: нет, неправильный синтаксис, надо НачатьТранзакцию
-🤖 ⚠️ Записана ошибка: none. Причина: "неправильный синтаксис, надо НачатьТранзакцию". Спасибо за пояснение, я запомню!
-```
+- **ReasoningBank** — семантическая память (HNSW, scoring, TTL, skills)
+- **Patient Knowledge Base** — код пациента сохраняется в `patient_kb.db`, доступен в контексте LLM и поиске
+- **ConfigLoader** — загрузка 1С-конфигураций (XML + BSL из Ext/ и Forms/)
+- **FTS5-поиск** — по загруженным конфигурациям с LIKE-fallback
+- **Анти-паттерны** — эхолалия, парафазия, контаминация, галлюцинация
+- **Production-grade system prompt** — загружается из `docs/production-grade_system_prompt.md`
+- **Streaming** — `--stream`, многострочный ввод, визуальные разделители
 
 ---
 
 ## Архитектура
 
 ```
-Пользователь → LirAgent.processMessage() / processMessageStream()
+Пользователь → LirAgent.processMessage()
    │
-   ├─ Проверка: "нет, <описание>" → parseErrorCommand() → handleErrorFeedback(description)
-   │
-   ├─ Проверка: waitingForFeedback → processFeedback()
-   │      ├─ "да" → recordFeedback(success) → promotion в навык (3 подряд)
-   │      └─ "нет" → ask_error_type → выбор типа ошибки
-   │
-   ├─ Сохранение диалога (domain='dialogue', outcome='pending')
-   │
-   └─ recommendWithWarnings() → LLM генерация
-           ├─ HNSWBackend.search() → k ближайших соседей (O(log N))
-           ├─ LRUCache.get() → кэш повторяющихся запросов (TTL 60s)
-           ├─ enrichedPrompt → OllamaClient.chat() / chatStream() → ответ LLM
-           └─ processMessageStream() → onChunk(токен) → потоковый вывод
+   ├─ Проверка команд, фидбека, языка
+   ├─ Сохранение кода в PatientKB
+   ├─ recommendWithWarnings() → LLM
+   └─ Ответ + "Я справился?"
 ```
 
-### Компоненты
+**Компоненты**: `ReasoningBankSemantic`, `PatientKnowledgeBase`, `ConfigStorage`, `ConfigLoader`, `OllamaClient`, `HNSWBackend`, `LRUCache`, `ToolIntegration`
 
-| Компонент | Файл | Назначение |
-|-----------|------|------------|
-| `ReasoningBankSemantic` | `src/ReasoningBankSemantic.ts` | Ядро памяти: запись, поиск, предотвращение ошибок, feedback, TTL |
-| `HNSWBackend` | `src/HNSWBackend.ts` | HNSW-индекс для приближённого поиска ближайших соседей |
-| `LRUCache` | `src/LRUCache.ts` | LRU-кэш результатов поиска с TTL |
-| `OllamaClient` | `src/OllamaClient.ts` | Клиент Ollama: chat, listModels, ping, chatStream (async generator) |
-| `LirAgent` | `src/LirAgent.ts` | Агент с памятью, выбором языка, feedback, переключением моделей и потоковой генерацией |
-| `IntentAnalyzer` | `src/tools/IntentAnalyzer.ts` | Семантический анализ: предложение инструментов |
-
----
-
-## Модель данных
-
-### Experience (опыт)
-
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `id` | `string` | Уникальный идентификатор |
-| `task` | `string` | Описание задачи |
-| `outcome` | `'success' \| 'failure'` | Результат |
-| `content` | `string` | Содержимое опыта (стратегия, описание ошибки) |
-| `domain` | `string` | Область: `tool`, `knowledge`, `dialogue`, `general` |
-| `error_type` | `ErrorType` | Тип ошибки: `парафазия`, `эхолалия`, `контаминация`, `галлюцинация`, `none` |
-| `confidence` | `number` | Уверенность (0–1) |
-| `usage_count` | `number` | Сколько раз использовался |
-| `consecutive_successes` | `number` | Последовательных успехов подряд |
-| `is_skill` | `boolean` | Закреплён как навык |
-| `user_input` | `string?` | Ввод пользователя |
-| `metadata.feedback_description` | `string?` | **Новое!** Пояснение при отрицательном фидбеке |
-| `metadata.agent_response` | `string?` | Ответ агента |
-| `created_at` | `string` | ISO-дата создания |
-| `expires_at` | `string?` | ISO-дата истечения (NULL для навыков) |
-| `embedding` | `Float32Array` | 384-мерный вектор (BLOB в SQLite) |
-
-### ErrorType (типы ошибок)
-
-| Тип | Описание | Совет |
-|-----|----------|-------|
-| `эхолалия` | Повторение фразы пользователя | Не повторяй фразу. Дай содержательный ответ |
-| `парафазия` | Искажение терминов/смысла | Проверяй термины перед использованием |
-| `контаминация` | Смешивание контекстов | Отвечай на один вопрос за раз |
-| `галлюцинация` | Выдуманные факты | Если не знаешь — скажи прямо |
-
----
-
-## Семантический поиск
-
-### Алгоритм scoring
-```
-score = 0.5 * similarity + 0.2 * recency + 0.3 * confidence + skillBonus
-
-similarity  — косинусное сходство query ↔ experience (0–1)
-recency     — константа 0.8 (можно заменить на exp-decay)
-confidence  — уверенность в опыте (0–1)
-skillBonus  — +0.2 если is_skill = true
-```
-
-### HNSW vs линейный поиск
-
-| N записей | Линейный (avg) | HNSW (avg) | Ускорение |
-|-----------|---------------|------------|-----------|
-| 10 | 1.03 ms | 1.12 ms | 0.9x |
-| 100 | 2.72 ms | 1.33 ms | 2.0x |
-| 1 000 | 18.16 ms | 1.50 ms | 12.1x |
-| 5 000 | 91.12 ms | 1.65 ms | **55.2x** |
-
-HNSW параметры (по умолчанию): `M=16`, `efConstruction=200`, `efSearch=50`.
-
-Индекс сохраняется в JSON-файл (`agentdb_hnsw.json`) и восстанавливается при перезапуске.
-
-### LRU-кэш
-- Размер: 256 записей (настраивается через `cacheSize`)
-- TTL: 60 секунд (настраивается через `cacheTTL`)
-- Ключ: `JSON.stringify({ query, k, domain, error_type, only_skills })`
-- Полная инвалидация при `recordExperience()` (добавление нового опыта)
-
----
-
-## Команды обратной связи
-
-### Правило «3 успеха → навык»
-После 3 последовательных подтверждений (`да`, `молодец`, `хорошо`) опыт автоматически помечается как `is_skill = true` и получает:
-- Бессрочное хранение (`expires_at = NULL`)
-- Бонус +0.2 к scoring
-- Приоритет в результатах поиска
-
-### Новая фича: фидбек с пояснением
-Теперь пользователь может написать в одной строке:
-```
-нет, неправильная команда, надо /search-code
-```
-Агент:
-1. Распознаёт паттерн `нет, <описание>`
-2. Сохраняет пояснение в `metadata.feedback_description`
-3. Не требует выбора типа ошибки (пропускает этот шаг)
-4. Записывает ошибку с тегом `error_type='none'`
-
-В базе данных появится запись с:
-- `outcome='failure'`
-- `metadata.feedback_description = "неправильная команда, надо /search-code"`
-- `metadata.user_feedback = "стоп, неправильная команда, надо /search-code"`
-
----
-
-## TTL и очистка
-
-| Тип записи | TTL | Поведение |
-|------------|-----|-----------|
-| Обычный опыт | 90 дней | Удаляется при `cleanupExpired()` |
-| Навык (`is_skill = 1`) | ∞ (NULL) | Никогда не удаляется |
-
-```typescript
-// Ручная очистка
-const { deleted } = await memory.cleanupExpired();
-
-// Мониторинг
-const stats = await memory.getTTLStats();
-// { total: 100, expired: 5, expiringSoon24h: 3, skills: 10, noExpiry: 10 }
-```
-
----
-
-## Выбор модели Ollama
-
-При запуске `chat.ts` агент:
-1. Показывает список всех доступных моделей
-2. Автоматически выбирает `gemma4:26b-a4b-it-q4_K_M` (если доступна)
-3. Если не удалось — использует первую доступную
-
-### Команды в диалоге
-| Команда | Действие |
-|---------|----------|
-| `/model` | Сменить модель (запросит имя вручную) |
-| `/models` | Показать список всех доступных моделей |
-
-### Конфигурация `.env`
-```env
-# Ollama Cloud
-OLLAMA_API_KEY=your_cloud_key
-OLLAMA_BASE_URL=https://ollama.com
-OLLAMA_MODEL=gpt-oss:20b-cloud
-
-# Или локальный Ollama:
-# OLLAMA_BASE_URL=http://localhost:11434
-# OLLAMA_API_KEY=
-# OLLAMA_MODEL=llama3.2:latest
-
-# Параметры генерации
-OLLAMA_TEMPERATURE=0.7
-OLLAMA_CONTEXT_LENGTH=4096
-```
-
-### Локальный Ollama
-1. Установите и запустите: `ollama serve`
-2. Скачайте модель: `ollama pull llama3.2`
-3. В `.env` укажите `OLLAMA_BASE_URL=http://localhost:11434`
-
----
-
-## API Reference
-
-### ReasoningBankSemantic
-
-```typescript
-class ReasoningBankSemantic {
-  constructor(config: {
-    dbPath: string;
-    dimension?: number;        // default: 384
-    namespace?: string;        // default: 'agent:lir'
-    hnswEnabled?: boolean;     // default: true
-    cacheSize?: number;        // default: 256
-    cacheTTL?: number;         // default: 60000 (ms)
-  });
-
-  // Запись опыта
-  recordExperience(exp: Experience): Promise<string>;
-
-  // Семантический поиск
-  retrieve(query: string, options?: {
-    k?: number;               // default: 5
-    domain?: string;
-    error_type?: string;
-    only_skills?: boolean;
-  }): Promise<RetrievedExperience[]>;
-
-  // Предотвращение ошибок
-  preventError(userInput: string, options?: {
-    k?: number;               // default: 5
-    threshold?: number;       // default: 0.4
-  }): Promise<ErrorWarning[]>;
-
-  // Автозапись ошибки из feedback
-  learnFromFeedback(
-    errorType: ErrorType,
-    userInput: string,
-    agentResponse: string,
-    description?: string        // НОВОЕ! Пояснение пользователя
-  ): Promise<string>;
-
-  // Рекомендации + предупреждения (объединённый метод)
-  recommendWithWarnings(query: string, userInput?: string): Promise<{
-    strategy: string;
-    priority: 'high' | 'normal';
-    warnings: ErrorWarning[];
-    enrichedPrompt: string;
-  }>;
-
-  // Feedback → promotion
-  recordFeedback(expId: string, success: boolean): Promise<{
-    consecutive: number;
-    promoted: boolean;
-  }>;
-
-  // Рекомендации (без предупреждений)
-  recommendStrategy(query: string, context?: {
-    text?: string;
-    error_type?: string;
-  }): Promise<{ strategy: string; priority: 'high' | 'normal'; experiences: RetrievedExperience[] }>;
-
-  // Статистика
-  getStats(): Promise<{
-    totalExperiences: number;
-    skills: number;
-    byOutcome: Record<string, number>;
-    byErrorType: Record<string, number>;
-    withUserInput: number;
-    byLanguage: Record<string, number>;
-  }>;
-
-  // TTL
-  cleanupExpired(): Promise<{ deleted: number }>;
-  getTTLStats(): Promise<{
-    total: number;
-    expired: number;
-    expiringSoon24h: number;
-    skills: number;
-    noExpiry: number;
-  }>;
-
-  // HNSW
-  rebuildIndex(): Promise<void>;
-
-  // Lifecycle
-  close(): Promise<void>;
-}
-```
-
-### LirAgent
-
-```typescript
-class LirAgent {
-  constructor(options: {
-    dbPath: string;
-    agentId?: string;
-    systemPrompt?: string;
-    llmModel?: string;        // default: OLLAMA_MODEL env or 'gpt-oss:20b-cloud'
-    temperature?: number;     // default: OLLAMA_TEMPERATURE env or 0.7
-    contextLength?: number;   // default: OLLAMA_CONTEXT_LENGTH env or 4096
-  });
-
-  processMessage(userInput: string): Promise<{
-    response: string;
-    fullPrompt: string;
-    warnings: ErrorWarning[];
-    action: 'respond' | 'learn_error' | 'record_success' | 'ask_language' | 'waiting_feedback';
-    languageQuestion?: string;
-  }>;
-
-  // Потоковая генерация (требует --stream)
-  processMessageStream(userInput: string, onChunk?: (chunk: string) => void): Promise<{
-    response: string;
-    fullPrompt: string;
-    warnings: ErrorWarning[];
-    action: 'respond' | 'learn_error' | 'record_success' | 'ask_language' | 'waiting_feedback';
-    languageQuestion?: string;
-  }>;
-
-  // Переключение модели Ollama
-  switchModel(newModel: string): Promise<{
-    success: boolean;
-    message: string;
-    available?: string[];
-  }>;
-
-  getCurrentModel(): string;
-  getAvailableModels(): Promise<ModelInfo[]>;
-
-  getStats(): Promise<any>;
-  close(): Promise<void>;
-}
-```
-
-### OllamaClient
-
-```typescript
-class OllamaClient {
-  constructor(options?: {
-    apiKey?: string;
-    baseUrl?: string;
-    model?: string;
-    temperature?: number;     // default: 0.7
-    contextLength?: number;   // default: 4096
-  });
-
-  listModels(): Promise<ModelInfo[]>;
-  chat(messages: ChatMessage[], model?: string): Promise<string>;
-  chatStream(messages: ChatMessage[], options?: { model?: string; temperature?: number; signal?: AbortSignal }): AsyncGenerator<string>;
-  chatStreamCallback(messages: ChatMessage[], onChunk: (chunk: string) => void, model?: string): Promise<void>;
-  ping(model?: string): Promise<boolean>;
-}
-```
-
----
-
-## Рекомендации по развитию
-
-1. ~~**Streaming-ответы** — использовать `chatStream()` для потоковой генерации ответов.~~ ✅ Реализовано (async generator + `--stream`)
-2. **Мониторинг** — добавить метрики (latency поиска, hit rate кэша, количество ошибок) через Prometheus.
-3. **Автоклассификация ошибок** — классификатор на основе эмбеддингов для автоматического определения типа ошибки.
-4. **Масштабирование** — протестировать на 50k–100k записей; при необходимости перейти на `sqlite-vec` или `ruvector`.
-5. **Docker** — этап 6 для воспроизводимых деплоев (отложен).
+Подробная архитектура и модель данных — в `docs/LirAgent-Technical-Documentation.md`.
 
 ---
 
@@ -504,66 +79,14 @@ class OllamaClient {
 
 | Файл | Описание |
 |------|----------|
-| `docs/LirAgent-Technical-Documentation.md` | Полная тех. документация LirAgent: архитектура, память, feedback loop, promotion, анти-паттерны |
-| `docs/MainArchitecture21.md` | 44 правила архитектуры LirAgent 2.1a — генетический код системы памяти, L0–L7 |
-| `docs/Formal_NORA_constitution.md` | Конституция NORA v1.0 — принципы, cognition, memory, retrieval, reasoning, governance |
-| `docs/NORA_Router_Engine_Architecture.md` | Архитектура Router Engine — когнитивный маршрутизатор для LirAgent |
-| `docs/nora_skill_dsl_specification.md` | Skill DSL — формальный язык описания навыков для NORA/LirAgent |
-| `docs/nora_trajectory_schema_architecture.md` | Trajectory Schema — модель жизненного цикла reasoning-path |
-| `docs/production-grade_system_prompt.md` | System Prompt продакшен-уровня для LirAgent |
-| `docs/Prolog_laws.md` | Конституционные законы NORA в формате Prolog для валидации |
-| `docs/Execution FSM.md` | Execution FSM — конечный автомат выполнения, protocol lock, вложенные FSM |
-| `docs/NORA_Checkpoint_Engine.md` | Checkpoint Engine — механический позвоночник runtime, барьерные чекпоинты |
-| `docs/NORA_anti-rationalization_runtime.md` | Anti-Rationalization Runtime (ARR) — принудительная проверка claims и артефактов |
-| `docs/REPAIR subsystem.md` | REPAIR Subsystem — автономное восстановление, классификация ошибок, метрики |
-| `docs/cat_seed persistence model.md` | Cat/Seed Persistence Model — механизм выживания памяти, poison-маркеры |
-| `docs/deterministic execution graph.md` | Deterministic Execution Graph — граф выполнения, graph_hash, replay |
-| `docs/memory database schema.md` | Memory Database Schema — схема БД памяти, таблицы, индексы |
-| `docs/planner-executor architecture.md` | Planner/Executor Architecture — разделение планирования и исполнения |
-| `docs/runtime validation pipeline.md` | Runtime Validation Pipeline — конвейер валидации, hallucination detection |
-| `docs/skill promotion algorithm.md` | Skill Promotion Algorithm — многофакторный промоушен, replay consistency |
+| `docs/LirAgent-Technical-Documentation.md` | **Полная техническая документация** |
+| `docs/production-grade_system_prompt.md` | System Prompt агента |
+| `docs/MainArchitecture21.md` | 44 правила архитектуры L0–L7 |
+| `docs/Formal_NORA_constitution.md` | Конституция NORA |
+| `docs/NORA_*` | NORA: Router, DSL, Trajectory, Checkpoint, ARR, REPAIR, Cat/Seed, DEG, FSM |
 
 ---
 
 ## Лицензия
 
 ISC
-
----
-
-## Статистика проекта
-
-- ✅ **TypeScript compilation**: passes
-- ✅ **SQL memory leak**: fixed (proper handling of prepared statements)
-- ✅ **Model selection**: working with `/model` and `/models` commands
-- ✅ **Negative feedback with description**: implemented (new feature)
-- ✅ **Repository cleanup**: 108 test/compiled files removed
-- ✅ **Tests**: comprehensive test suite passes
-- ✅ **Streaming responses**: implemented (async generator + `--stream` flag)
-- ✅ **Multi-line input**: Пуск!/!go/send signal, /cancel, clipboard paste support
-- ✅ **Visual separators**: `=====` before response, `---` before feedback question
-- ✅ **Production-grade system prompt**: loaded from `docs/production-grade_system_prompt.md`, language consistency policy, critical rules, error handling on missing file
-- ✅ **Patient Knowledge Base**: separate SQLite DB (`patient_kb.db`), auto-saves code blocks from user messages, injects recent code into LLM context, LIKE-search, `/next` command to clear
-- ✅ **ConfigLoader**: parse 1C XML metadata (Catalog, Document, DataProcessor, CommonModule, Enum, InformationRegister, ChartOfCharacteristicTypes, EventSubscription), load BSL from Ext/ and Forms/
-- ✅ **ConfigStorage**: `config_objects` table + FTS5 index (`unicode61` tokenizer), search with LIKE-fallback
-- ✅ **Commands `/load-config`, `/search-code`, `/semantic-search`**: load 1C dump, FTS-search with diagnostics, object count display
-- ✅ **Tests (15)**: PatientKnowledgeBase (7), extractCodeBlocks (5), nextCommand (3), vitest suite
-- ✅ **TypeScript**: `npx tsc --noEmit` passes with 0 errors
-- 📦 **Documentation**: updated (this file)
-- 📄 **10 новых архитектурных документов**: Execution FSM, Checkpoint Engine, ARR, REPAIR Subsystem, Cat/Seed, DEG, Memory Schema, Planner/Executor, Validation Pipeline, Skill Promotion
-- 🔄 **MainArchitecture21.md v2.1a**: L5.5/L5.7 слои, Planner/Executor, REPAIR, ARR, changelog
-
-### Commit History
-- `70dcf00` - Update README: document 1C config loading, PatientKB, tests, new commands
-- `727dbea` - ConfigLoader: load BSL from Forms/*/Ext/Form/Module.bsl, add LIKE fallback, fix tokenizer
-- `f7ec9a8` - Production-grade system prompt: load from file, add language consistency policy, error handling
-- `53306d6` - Add streaming response support and multi-line input
-- `63d6dd6` - Add L0-L7 architectural layer markup for 44 rules
-- `7feae99` - Add detailed REPAIR Subsystem section (2.6) with error classification, pseudocode, and metrics
-- `dbed6f6` - Update MainArchitecture21.md
-- `034c448` - Update commit history: add MainArchitecture21.md v2.1 update
-- `a5b4d38` - Update MainArchitecture21.md: v2.1 Cognitive Runtime Specification, add L0-L7 architectural layers
-- `5dfa9d5` - Add documentation index table to README
-- `1f4f43e` - Add scratch folder and 'never delete, only scratch' rule
-- `f965869` - Rename Architecture21.md to MainArchitecture21.md
-- `60d1974` - Add NORA architecture documentation suite
