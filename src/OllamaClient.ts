@@ -100,12 +100,28 @@ export class OllamaClient {
     }
   }
 
-  async chatStream(
+  /**
+   * Callback-based streaming (kept for backward compatibility)
+   */
+  async chatStreamCallback(
     messages: ChatMessage[],
     onChunk: (chunk: string) => void,
     model?: string
   ): Promise<void> {
-    const selectedModel = model || this.defaultModel;
+    for await (const chunk of this.chatStream(messages, { model })) {
+      onChunk(chunk);
+    }
+  }
+
+  /**
+   * AsyncGenerator-based streaming — yields tokens as they arrive.
+   * Supports optional AbortSignal for cancellation.
+   */
+  async *chatStream(
+    messages: ChatMessage[],
+    options?: { model?: string; temperature?: number; signal?: AbortSignal }
+  ): AsyncGenerator<string> {
+    const selectedModel = options?.model || this.defaultModel;
     const url = `${this.baseUrl}/api/chat`;
 
     const body = {
@@ -113,7 +129,7 @@ export class OllamaClient {
       messages: messages,
       stream: true,
       options: {
-        temperature: this.temperature,
+        temperature: options?.temperature ?? this.temperature,
         num_ctx: this.contextLength,
       },
     };
@@ -122,6 +138,7 @@ export class OllamaClient {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(body),
+      signal: options?.signal,
     });
 
     if (!response.ok) {
@@ -145,7 +162,7 @@ export class OllamaClient {
           try {
             const data = JSON.parse(line);
             if (data.message?.content) {
-              onChunk(data.message.content);
+              yield data.message.content;
             }
           } catch {
             // ignore parse errors for partial chunks

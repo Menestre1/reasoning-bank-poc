@@ -1,6 +1,7 @@
 #!/usr/bin/env npx tsx
 import { LirAgent } from './src/LirAgent.js';
 import { ask } from './src/tools/ToolExecutor.js';
+import * as readline from 'readline';
 
 const PROMPTS = {
   help: `
@@ -16,6 +17,13 @@ const PROMPTS = {
      2 — парафазия (искажение терминов)
      3 — контаминация (смешивание)
      4 — галлюцинация (выдумки)
+
+  📋 Ввод:
+  • одна строка — Enter отправляет сразу (для команд /...)
+  • много строк — вводите текст построчно, затем отправьте сигналом
+  • сигнал отправки: \`Пуск!\`, /send или !go отдельной строкой
+  • отмена: /cancel или \`отмена\` отдельной строкой
+  • вставка из буфера обмена работает для многострочного текста
 
 📋 Дополнительные команды:
   • /tools             — список всех инструментов
@@ -35,8 +43,10 @@ const PROMPTS = {
 };
 
 async function main() {
+  const useStreaming = process.argv.includes('--stream');
+
   console.log('==================================================');
-  console.log('🤖 Агент Лирь — с авто-опросом после ответа');
+  console.log(`🤖 Агент Лирь — с авто-опросом после ответа${useStreaming ? ' (streaming)' : ''}`);
   console.log('==================================================\n');
 
   const agent = new LirAgent({
@@ -73,20 +83,58 @@ async function main() {
     console.log('\n⚠️ Нет доступных моделей Ollama');
   }
 
-  console.log('🎮 Начинаем диалог...\n');
+  console.log('🎮 Начинаем диалог... (Пуск! /send !go — отправить, /cancel отмена)\n');
 
-  // Get user input function
-  const getInput = async (): Promise<string> => {
+  // Multi-line input via readline
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+  const SEND_SIGNALS = ['пуск!', '/send', '!go'];
+  const CANCEL_SIGNALS = ['/cancel', 'отмена'];
+
+  const getMultilineInput = (prompt: string): Promise<string> => {
     return new Promise((resolve) => {
-      process.stdin.once('data', (data) => {
-        resolve(data.toString().trim());
-      });
+      const lines: string[] = [];
+      process.stdout.write(prompt);
+
+      const handler = (line: string) => {
+        const trimmed = line.trim();
+        const lower = trimmed.toLowerCase();
+
+        // Commands: send immediately on first line only
+        if (lines.length === 0 && line.startsWith('/') && !SEND_SIGNALS.includes(lower) && !CANCEL_SIGNALS.includes(lower)) {
+          rl.off('line', handler);
+          resolve(line);
+          return;
+        }
+
+        // Cancel: discard buffer and return empty
+        if (CANCEL_SIGNALS.includes(lower) && lines.length > 0) {
+          rl.off('line', handler);
+          console.log('  (отменено)');
+          resolve('');
+          return;
+        }
+
+        // Send signals: flush buffer (excluding the signal itself)
+        if (SEND_SIGNALS.includes(lower)) {
+          rl.off('line', handler);
+          resolve(lines.join('\n'));
+          return;
+        }
+
+        lines.push(line);
+        if (lines.length === 1) {
+          console.log('  (multi-line, type Пуск! to send)');
+        }
+        process.stdout.write('  > ');
+      };
+
+      rl.on('line', handler);
     });
   };
 
   while (true) {
-    process.stdout.write('\n💬 Вы: ');
-    const input = await getInput();
+    const input = await getMultilineInput('\n💬 Вы:\n  > ');
     const trimmed = input.trim();
 
     if (!trimmed) continue;
@@ -119,15 +167,29 @@ async function main() {
     }
 
     try {
-      const result = await agent.processMessage(trimmed);
-      
+      let result;
+
+      if (useStreaming) {
+        console.log('\n' + '='.repeat(45));
+        process.stdout.write('🤖 Лирь: ');
+        result = await agent.processMessageStream(trimmed, (chunk) => {
+          process.stdout.write(chunk);
+        });
+        process.stdout.write('\n');
+      } else {
+        result = await agent.processMessage(trimmed);
+      }
+
       if (result.action === 'ask_language') {
         console.log(`\n🤖 Лирь: ${result.languageQuestion}`);
         continue;
       }
 
       if (result.action === 'waiting_feedback') {
-        console.log(`\n🤖 Лирь: ${result.response}`);
+        // LLM response was streamed; the question was appended via onChunk
+        if (!useStreaming) {
+          console.log(`\n🤖 Лирь: ${result.response}`);
+        }
         continue;
       }
 
@@ -141,8 +203,10 @@ async function main() {
         continue;
       }
 
-      // Normal response
-      console.log(`\n🤖 Лирь: ${result.response}`);
+      // Normal response — already printed in streaming mode
+      if (!useStreaming) {
+        console.log(`\n🤖 Лирь: ${result.response}`);
+      }
 
       if (result.warnings && result.warnings.length > 0) {
         console.log('\n⚠️ ПРЕДУПРЕЖДЕНИЯ:');
@@ -155,6 +219,7 @@ async function main() {
     }
   }
 
+  rl.close();
   await agent.close();
   console.log('\nДо свидания!');
   process.exit(0);

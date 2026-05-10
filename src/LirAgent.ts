@@ -504,6 +504,295 @@ export class LirAgent {
     return this.processWithLanguage(userInput, this.session.lastDetectedLanguage);
   }
 
+  /**
+   * processMessageStream — like processMessage but streams LLM response chunks.
+   * For early-return cases (commands, tool confirmations, feedback, language choice)
+   * it behaves identically to processMessage.
+   * For the LLM interaction path, it calls ollamaClient.chatStream() and invokes
+   * onChunk for each token, then performs the same post-processing.
+   */
+  async processMessageStream(
+    userInput: string,
+    onChunk?: (chunk: string) => void
+  ): Promise<any> {
+    // === Command handlers (same as processMessage lines 236-327) ===
+    if (userInput.startsWith('/load-config')) {
+      const targetPath = userInput.slice(13).trim();
+      if (!targetPath) return this.createResponse('Укажите путь к выгрузке конфигурации.');
+      return this.handleLoadConfig(targetPath);
+    }
+    if (userInput.startsWith('/search-code')) {
+      const query = userInput.slice(12).trim();
+      if (!query) return this.createResponse('Укажите текст для поиска.');
+      return this.handleSearchCode(query);
+    }
+    if (userInput.startsWith('/semantic-search')) {
+      const query = userInput.slice(16).trim();
+      if (!query) return this.createResponse('Укажите описание для семантического поиска.');
+      return this.handleSemanticSearch(query);
+    }
+    if (userInput.startsWith('/load-measurements')) {
+      const dirPath = userInput.slice(18).trim();
+      if (!dirPath) return this.createResponse('Укажите путь к папке с замерами.');
+      return this.handleLoadMeasurements(dirPath);
+    }
+    if (userInput.startsWith('/top-slow')) {
+      const parts = userInput.slice(9).trim().split(' ') || [];
+      const limit = parseInt(parts[0] || '10');
+      const objectName = parts[1] || null;
+      return this.handleTopSlow(limit, objectName);
+    }
+    if (userInput.startsWith('/explain-slow')) {
+      const objectName = userInput.slice(13).trim();
+      if (!objectName) return this.createResponse('Укажите имя объекта.');
+      return this.handleExplainSlow(objectName);
+    }
+    if (userInput.startsWith('/build-graph')) {
+      return this.handleBuildGraph();
+    }
+    if (userInput.startsWith('/callers')) {
+      const parts = userInput.slice(8).trim().split('.');
+      const objectName = parts[0] || '';
+      const methodName = parts[1] || null;
+      if (!objectName) return this.createResponse('Укажите имя объекта: /callers <Объект.Метод>');
+      return this.handleCallers(objectName, methodName);
+    }
+    if (userInput.startsWith('/callees')) {
+      const parts = userInput.slice(8).trim().split('.');
+      const objectName = parts[0] || '';
+      const methodName = parts[1] || null;
+      if (!objectName) return this.createResponse('Укажите имя объекта: /callees <Объект.Метод>');
+      return this.handleCallees(objectName, methodName);
+    }
+    if (userInput.startsWith('/cycles')) {
+      return this.handleFindCycles();
+    }
+    if (userInput.startsWith('/graph-viz')) {
+      const objectName = userInput.slice(10).trim() || null;
+      return this.handleGraphViz(objectName);
+    }
+    if (userInput.startsWith('/compare-config')) {
+      const parts = userInput.slice(16).trim().split(' ');
+      if (parts.length < 2 || !parts[0] || !parts[1]) return this.createResponse('Укажите оба пути: /compare-config <old> <new>');
+      return this.handleCompareConfig(parts[0], parts[1]);
+    }
+    if (userInput.startsWith('/comparison-summary')) {
+      return this.handleComparisonSummary();
+    }
+    if (userInput.startsWith('/diff-module')) {
+      const objectName = userInput.slice(13).trim();
+      if (!objectName) return this.createResponse('Укажите имя объекта: /diff-module <объект>');
+      return this.handleDiffModule(objectName);
+    }
+    if (userInput.startsWith('/changed-objects')) {
+      const type = userInput.slice(17).trim() || null;
+      return this.handleChangedObjects(type);
+    }
+    if (userInput.startsWith('/explain')) {
+      const rest = userInput.slice(8).trim();
+      if (!rest) return this.createResponse('Укажите объект и метод: /explain Объект.Метод');
+      return this.handleExplain(rest);
+    }
+    if (userInput.startsWith('/extract-my-code')) {
+      const parts = userInput.slice(16).trim().split(/\s+/);
+      const inputFile = parts[0];
+      const outputFile = parts[1] || './extracted_code.txt';
+      if (!inputFile) return this.createResponse('Укажите входной файл. Пример: /extract-my-code ./1.txt ./my_code.txt');
+      const result = await this.runExtractMyCode(inputFile, outputFile);
+      this.session.waitingForFeedback = true;
+      this.session.lastUserInput = userInput;
+      return {
+        response: `${result.response}\n\nЯ справился? (да/нет/отмена)`,
+        fullPrompt: result.fullPrompt,
+        warnings: result.warnings,
+        action: 'waiting_feedback',
+      };
+    }
+
+    // Learn from last successful dialog
+    if (userInput === '/learn' && !this.session.waitingForFeedback) {
+      return this.handleLearn();
+    }
+
+    // === TOOL INTEGRATION (same as processMessage lines 334-406) ===
+    if (this.session.waitingForTool) {
+      const result = await this.toolIntegration?.processConfirmation(
+        userInput,
+        this.session.pendingTool,
+        this.session.pendingToolInput
+      );
+
+      if (result?.action === 'waiting_confirmation' || result?.action === 'waiting_parameter') {
+        return { response: result.response || 'Waiting for input...', fullPrompt: '', warnings: [], action: 'respond' };
+      }
+
+      if (result?.action === 'completed') {
+        this.session.waitingForTool = false;
+        this.session.pendingTool = null;
+        this.session.pendingToolInput = '';
+        if (result.executionResult?.success) {
+          return { response: `Tool executed: ${result.toolResponse}\n\nDid I succeed? (yes/no/cancel)`, fullPrompt: '', warnings: [], action: 'waiting_feedback' };
+        } else {
+          return { response: `Tool error: ${result.executionResult?.error || 'Unknown error'}`, fullPrompt: '', warnings: [], action: 'respond' };
+        }
+      }
+
+      if (result?.action === 'cancelled') {
+        this.session.waitingForTool = false;
+        this.session.pendingTool = null;
+        this.session.pendingToolInput = '';
+        return { response: result.response || 'Cancelled.', fullPrompt: '', warnings: [], action: 'respond' };
+      }
+    }
+
+    // Semantic analysis
+    if (!this.session.lastDetectedLanguage || this.session.lastDetectedLanguage === 'general') {
+      const intentResult = await this.toolIntegration?.analyzeIntent(userInput);
+      if (intentResult?.shouldSuggest && intentResult.tool) {
+        this.session.waitingForTool = true;
+        this.session.pendingTool = intentResult.tool;
+        this.session.pendingToolInput = userInput;
+        return { response: `Tool detected: "${intentResult.tool.name}".\n${intentResult.tool.content}\n\nRun tool? (yes/no)`, fullPrompt: '', warnings: [], action: 'respond' };
+      }
+    }
+
+    // Waiting for language
+    if (this.session.waitingForLanguage) {
+      this.session.waitingForLanguage = false;
+      const pending = this.session.pendingInput;
+      const langResult = await this.handleLanguageChoice(userInput);
+      if (langResult.detectedLanguage === 'general') {
+        this.session.lastDetectedLanguage = 'general';
+        return this.processMessageStream(pending, onChunk);
+      } else if (langResult.action === 'language_set') {
+        this.session.lastDetectedLanguage = langResult.detectedLanguage;
+        return this.processMessageStream(pending, onChunk);
+      } else {
+        this.session.waitingForLanguage = true;
+        this.session.pendingInput = pending;
+        return { response: `Не понял. ${this.getLanguageOptions()}`, fullPrompt: '', warnings: [], action: 'ask_language', languageQuestion: this.getLanguageOptions() };
+      }
+    }
+
+    // Waiting for feedback
+    if (this.session.waitingForFeedback) {
+      if (userInput.startsWith('/')) {
+        const commandResult = await this.handleCommandInFeedbackMode(userInput);
+        if (commandResult.exitsFeedbackMode) {
+          this.session.waitingForFeedback = false;
+          return commandResult;
+        }
+        return { response: commandResult.response + '\n\n---\n**Я справился? (да/нет/отмена)**', fullPrompt: '', warnings: [], action: 'waiting_feedback' };
+      }
+      return this.processWithLanguage(userInput, this.session.lastDetectedLanguage || 'general');
+    }
+
+    // Waiting for language (second check)
+    if (this.session.waitingForLanguage) {
+      this.session.waitingForLanguage = false;
+      const pending = this.session.pendingInput;
+      const langResult = await this.handleLanguageChoice(userInput);
+      if (langResult.detectedLanguage === 'general') {
+        this.session.lastDetectedLanguage = 'general';
+        return this.processMessageStream(pending || userInput, onChunk);
+      } else if (langResult.action === 'language_set') {
+        this.session.lastDetectedLanguage = langResult.detectedLanguage;
+        return this.processMessageStream(pending || userInput, onChunk);
+      } else {
+        this.session.waitingForLanguage = true;
+        this.session.pendingInput = pending;
+        return { response: `Не понял. ${this.getLanguageOptions()}`, fullPrompt: '', warnings: [], action: 'ask_language', languageQuestion: this.getLanguageOptions() };
+      }
+    }
+
+    // Language not yet detected — default to 'general' and fall through to streaming
+    if (!this.session.lastDetectedLanguage) {
+      this.session.lastDetectedLanguage = 'general';
+    }
+
+    // === LLM interaction path with streaming ===
+    const language = this.session.lastDetectedLanguage;
+    this.session.lastUserInput = userInput;
+
+    const knowledgeResult = await this.searchKnowledge(userInput);
+
+    const dialogueId = `dialogue-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    try {
+      const actualId = await this.memory.recordExperience({
+        id: dialogueId,
+        task: userInput.slice(0, 200),
+        outcome: 'pending',
+        content: '',
+        domain: 'dialogue',
+        error_type: 'none',
+        confidence: 0.5,
+        user_input: userInput,
+        metadata: {
+          language: language || 'general',
+          timestamp: new Date().toISOString(),
+          pending: true,
+          feedback_description: null,
+        },
+      });
+      this.session.lastDialogueId = actualId;
+      this.session.lastExperienceId = actualId;
+    } catch (err: any) {
+      console.error('[LirAgent] Error saving dialogue:', err.message);
+    }
+
+    const enriched = await this.memory.recommendWithWarnings(userInput, { k: 5, threshold: 0.4, language });
+    let fullSystemPrompt = this.buildSystemPrompt(enriched.enrichedPrompt, language);
+
+    const hasWarnings = enriched.warnings.length > 0;
+    if (hasWarnings) {
+      fullSystemPrompt += `\n\n⚠️ ВНИМАНИЕ: Обнаружены негативные паттерны! НЕ используй информацию, которая приводила к ошибкам: ${enriched.warnings.map(w => w.error_type).join(', ')}. Измени подход!`;
+    } else if (knowledgeResult.bestScore >= 0.6 && knowledgeResult.content) {
+      fullSystemPrompt += `\n\nYou are Лирь. Answer the question using ONLY the following information (do not add your own explanations):\n${knowledgeResult.content}\n\nEnd of knowledge.`;
+    }
+
+    this.session.conversationHistory.push({ role: 'user', content: userInput });
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: fullSystemPrompt },
+      ...this.session.conversationHistory.slice(-10),
+    ];
+
+    let response = '';
+    try {
+      if (onChunk) {
+        // Streaming mode
+        for await (const chunk of this.llmClient.chatStream(messages, { model: this.llmModel })) {
+          response += chunk;
+          onChunk(chunk);
+        }
+      } else {
+        // Non-streaming fallback (same as processMessage)
+        response = await this.llmClient.chat(messages, this.llmModel);
+      }
+    } catch (error) {
+      console.error('LLM generation failed:', error);
+      response = this.generateFallbackResponse(userInput, enriched);
+    }
+
+    this.session.lastAgentResponse = response;
+    this.session.conversationHistory.push({ role: 'assistant', content: response });
+
+    await this.recordExperiencePending(userInput, response, enriched.warnings, language);
+
+    this.session.waitingForFeedback = true;
+
+    if (onChunk) {
+      onChunk('\n\n---\n**Я справился? (да/нет/отмена)**');
+    }
+
+    return {
+      response: response + '\n\n---\n**Я справился? (да/нет/отмена)**',
+      fullPrompt: fullSystemPrompt,
+      warnings: enriched.warnings,
+      action: 'waiting_feedback',
+    };
+  }
+
   private async searchKnowledge(query: string): Promise<{
     content: string;
     bestScore: number;
