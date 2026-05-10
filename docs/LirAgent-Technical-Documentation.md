@@ -382,68 +382,29 @@ CREATE INDEX IF NOT EXISTS idx_rb_error_type ON rb_experiences(error_type);
 - For dialogues: Exact `task` match check (`ReasoningBankSemantic.ts:249-257`)
 - For general experiences: `findSimilarExisting()` semantic search (see below)
 
----
+### TTL and Cleanup
 
-## Dialogue Lifecycle
+Experience records have a configurable time-to-live:
 
-### States and Transitions
+| Record type | TTL | Behavior |
+|-------------|-----|----------|
+| Normal experience | 90 days | Removed by `cleanupExpired()` |
+| Skill (`is_skill = 1`) | ∞ (NULL) | Never removed |
+| Pending dialogue | 90 days | Removed if feedback never received |
 
-```
-User asks question
-    │
-    ▼
-[recordExperience(outcome: 'pending')]  ← Dialogue created with pending status
-    │
-    │  - lastDialogueId saved in session
-    │  - lastExperienceId set for recordFeedback
-    │
-    ▼
-Agent generates response using LLM
-    │
-    ▼
-Display response + "Я справился? (да/нет/отмена)"
-    │
-    ▼
-User says "да" (success)
-    │
-    ▼
-[recordFeedback(expId, true)]
-    │
-    ├─▶ Update outcome to 'success'
-    ├─▶ Increment consecutive_successes by 1
-    └─▶ If consecutive_successes >= 3: promote to skill
-            Return { consecutive: N, promoted: true }
+```typescript
+// Manual cleanup
+const { deleted } = await memory.cleanupExpired();
 
-User says "нет" (failure)
-    │
-    ▼
-[handleErrorFeedback(errorType)]
-    │
-    ├─▶ Update outcome to 'failure'
-    ├─▶ Reset consecutive_successes to 0
-    ├─▶ Record error_type (эхолалия/парафазия/контаминация/галлюцинация)
-    └─▶ If text follows "нет, <description>":
-            Save feedback_description in metadata
-            Display: "⚠️ Записана ошибка: <type>. Спасибо за пояснение!"
-
-User says "отмена" (cancel)
-    │
-    ▼
-[processFeedback()]
-    │
-    └─▶ Do NOT update database
-            Return: "Ок, не сохраняем."
+// Monitor TTL stats
+const stats = await memory.getTTLStats();
+// { total: 100, expired: 5, expiringSoon24h: 3, skills: 10, noExpiry: 10 }
 ```
 
-### Important Notes
-
-1. **Pending experiences don't affect ranking**: Until feedback is received, the experience has `outcome='pending'` and won't influence skill promotion or warnings.
-
-2. **usage_count vs consecutive_successes**:
-   - `usage_count`: Total times experience was used (incremented by `findSimilarExisting`)
-   - `consecutive_successes`: Consecutive successes (reset on failure, used for skill promotion)
-
-3. **Duplicate prevention**: For dialogues, exact `task` match prevents duplicates. For other domains, `findSimilarExisting()` with threshold 0.7-0.85 prevents semantic duplicates.
+Skills receive:
+- Permanent storage (`expires_at = NULL`)
+- +0.2 scoring bonus in retrieval
+- Priority in search results
 
 ---
 
@@ -1023,12 +984,29 @@ Approximate nearest neighbor search using Hierarchical Navigable Small World gra
 - **Query time**: O(log N)
 - Used for fast similarity search when dataset grows beyond ~1000 items
 
+**Default parameters**: `M=16`, `efConstruction=200`, `efSearch=50`.
+
+**Benchmark vs linear search**:
+
+| N записей | Линейный (avg) | HNSW (avg) | Ускорение |
+|-----------|---------------|------------|-----------|
+| 10 | 1.03 ms | 1.12 ms | 0.9x |
+| 100 | 2.72 ms | 1.33 ms | 2.0x |
+| 1 000 | 18.16 ms | 1.50 ms | 12.1x |
+| 5 000 | 91.12 ms | 1.65 ms | **55.2x** |
+
+Index is persisted to `agentdb_hnsw.json` and restored on restart.
+
 ### 3. LRU Cache with TTL (`src/LRUCache.ts`)
 
+**Code location**: `src/LRUCache.ts`
+
 Caches query results to avoid recomputation:
-- **Max size**: Configurable (default 256)
-- **TTL**: Configurable (default 5 minutes)
-- **Key**: JSON string of `{ query, k, domain, error_type, only_skills }`
+- **Max size**: Configurable via `cacheSize` (default 256)
+- **TTL**: Configurable via `cacheTTL` (default 60000 ms / 60 seconds)
+- **Key**: `JSON.stringify({ query, k, domain, error_type, only_skills })`
+- **Invalidation**: Full cache clear on `recordExperience()` (new experience added)
+- **Eviction**: Least recently used entries evicted when size exceeds max
 
 ### 4. Dialogue Deduplication (`recordExperience()`, lines 244-253)
 
@@ -1244,8 +1222,22 @@ loadDirectory(rootPath)
 - `/model <name>` - Switch to specific model
 
 ### Environment Variables
-- `OLLAMA_TEMPERATURE` - LLM temperature (default: from constructor)
-- `OLLAMA_CONTEXT_LENGTH` - Max context window (default: from constructor)
+
+```env
+# Ollama Cloud
+OLLAMA_API_KEY=your_cloud_key
+OLLAMA_BASE_URL=https://ollama.com
+OLLAMA_MODEL=gpt-oss:20b-cloud
+
+# Или локальный Ollama:
+# OLLAMA_BASE_URL=http://localhost:11434
+# OLLAMA_API_KEY=
+# OLLAMA_MODEL=llama3.2:latest
+
+# Параметры генерации
+OLLAMA_TEMPERATURE=0.7        # Температура LLM (0.0–1.0)
+OLLAMA_CONTEXT_LENGTH=4096    # Максимальная длина контекста
+```
 
 ### Model Info in Chat Startup
 At startup, agent displays available models:
@@ -1355,7 +1347,24 @@ new LirAgent({
 
 ---
 
-## Appendix C: Glossary
+## Appendix C: Scratch Policy
+
+**Never delete files — only move to `scratch/`.**
+
+This rule applies always and to all files:
+- Tests (`test-*.ts`, `test-*.mjs`)
+- Backups (`.backup`)
+- Diagnostic files (`.d.ts.map`, logs)
+- Old test data
+- Compiled files not needed in the repository
+
+If a file should not be pushed — it goes to `scratch/`, not deleted. This preserves history and context in case a past test result or disabled diagnostic needs to be revisited.
+
+The `scratch/` folder is in `.gitignore` — files there are not pushed, but stay local.
+
+---
+
+## Appendix D: Glossary
 
 | Term | Definition |
 |------|------------|
@@ -1375,7 +1384,44 @@ new LirAgent({
 
 ---
 
-## Appendix D: Reading Paths
+## Appendix E: Recommendations for Future Development
+
+1. ~~**Streaming responses** — use `chatStream()` for streaming generation~~ ✅ Done
+2. **Monitoring** — add metrics (search latency, cache hit rate, error counts) via Prometheus
+3. **Auto-classification of errors** — classifier based on embeddings for automatic error type detection
+4. **Scaling** — test on 50k–100k records; switch to `sqlite-vec` or `ruvector` if needed
+5. **Docker** — stage 6 for reproducible deployments (deferred)
+6. **Vector search in PatientKB** — replace LIKE with embeddings for semantic patient code search
+7. **BSL AST parser** — tokenize and index BSL code by functions/procedures for symbol-level search
+
+---
+
+## Appendix G: Document Index
+
+| File | Description |
+|------|-------------|
+| `docs/LirAgent-Technical-Documentation.md` | Full technical documentation (this document) |
+| `docs/production-grade_system_prompt.md` | Production-grade system prompt for LirAgent |
+| `docs/MainArchitecture21.md` | 44 rules of LirAgent 2.1a architecture — genetic code of memory system, L0–L7 |
+| `docs/Formal_NORA_constitution.md` | NORA v1.0 Constitution — principles, cognition, memory, retrieval, reasoning, governance |
+| `docs/NORA_Router_Engine_Architecture.md` | Router Engine architecture — cognitive router for LirAgent |
+| `docs/nora_skill_dsl_specification.md` | Skill DSL — formal language for NORA/LirAgent skills |
+| `docs/nora_trajectory_schema_architecture.md` | Trajectory Schema — reasoning-path lifecycle model |
+| `docs/Prolog_laws.md` | NORA constitutional laws in Prolog format for validation |
+| `docs/Execution FSM.md` | Execution FSM — finite state machine, protocol lock, nested FSMs |
+| `docs/NORA_Checkpoint_Engine.md` | Checkpoint Engine — mechanical spine of runtime, barrier checkpoints |
+| `docs/NORA_anti-rationalization_runtime.md` | Anti-Rationalization Runtime (ARR) — forced claim and artifact verification |
+| `docs/REPAIR subsystem.md` | REPAIR Subsystem — autonomous recovery, error classification, metrics |
+| `docs/cat_seed persistence model.md` | Cat/Seed Persistence Model — memory survival, poison markers |
+| `docs/deterministic execution graph.md` | Deterministic Execution Graph — execution graph, graph_hash, replay |
+| `docs/memory database schema.md` | Memory Database Schema — DB schema, tables, indexes |
+| `docs/planner-executor architecture.md` | Planner/Executor Architecture — planning and execution separation |
+| `docs/runtime validation pipeline.md` | Runtime Validation Pipeline — validation pipeline, hallucination detection |
+| `docs/skill promotion algorithm.md` | Skill Promotion Algorithm — multi-factor promotion, replay consistency |
+
+---
+
+## Appendix H: Reading Paths
 
 ### For Developers (New to Codebase)
 1. Start with `chat.ts` (entry point)
@@ -1398,7 +1444,7 @@ new LirAgent({
 
 ---
 
-**Document Version**: 1.2  
+**Document Version**: 1.3  
 **Last Updated**: 2026-05-10  
 **Maintainer**: LirAgent Development Team
 
@@ -1407,14 +1453,22 @@ new LirAgent({
 ## Complete Agent Command List
 
 ### Conversation Commands
-- `да` / `yes` / `👍` - Positive feedback (triggers `handleSuccessFeedback()`)
-- `нет` / `no` / `👎` - Negative feedback (triggers error type selection)
+- `да` / `yes` / `👍` / `молодец` / `хорошо` - Positive feedback (+1 to consecutive_successes)
+- `нет` / `no` / `👎` / `неправильно` - Negative feedback (triggers error type selection)
+- `нет, <описание>` - Negative feedback with description (skips error type selection)
 - `отмена` / `cancel` - Cancel feedback (does NOT save to database)
 - `/learn` - Save last Q&A as permanent knowledge
+- `/lang` - Choose programming language
+
+### Multi-Line Input
+- `Пуск!` / `/send` / `!go` — Send accumulated multi-line text
+- `/cancel` / `отмена` — Cancel input, clear buffer
+- Empty line (Enter on blank) — Ignored, prompts for more input
 
 ### Model Management
 - `/models` - List available Ollama models
 - `/model <name>` - Switch to specific model (e.g., `/model gemma4:26b`)
+- Auto-selects `gemma4:26b-a4b-it-q4_K_M` at startup if available
 
 ### 1C Configuration Analysis
 - `/load-config <path>` - Load 1C configuration XML export (parses XML + loads BSL from Ext/ and Forms/)
@@ -1432,7 +1486,7 @@ new LirAgent({
 
 ### Patient Knowledge Base
 - `/next` - Clear patient code memory (deletes all `patient_knowledge` for current profile)
-- Code blocks are extracted and saved **automatically** from every user message
+- Code blocks are extracted and saved **automatically** from every user message (fenced ``` or indented 4+ spaces)
 
 ### Tool Management
 - `/tools` - List available tools
@@ -1441,3 +1495,4 @@ new LirAgent({
 ### System
 - `/help` - Show available commands
 - `/stats` - Show agent statistics (experiences, skills, errors)
+- `/exit` - Exit the application
