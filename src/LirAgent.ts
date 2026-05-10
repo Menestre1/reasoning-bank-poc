@@ -744,6 +744,7 @@ export class LirAgent {
           // silently ignore save errors
         }
       }
+      console.log(`[PatientKB] Saved ${codeBlocks.length} code block(s) for "${patientProfile}"`);
     }
 
     const knowledgeResult = await this.searchKnowledge(userInput);
@@ -797,6 +798,7 @@ export class LirAgent {
     }
     if (formattedBlocks.length > 0) {
       fullSystemPrompt += `\n\n## Code from this patient\n${formattedBlocks.join('\n\n')}`;
+      console.log(`[PatientKB] Injected ${formattedBlocks.length} code block(s) into prompt context`);
     }
 
     this.session.conversationHistory.push({ role: 'user', content: userInput });
@@ -1051,6 +1053,7 @@ export class LirAgent {
           // silently ignore save errors
         }
       }
+      console.log(`[PatientKB] Saved ${codeBlocks.length} code block(s) for "${patientProfile}"`);
     }
 
     // Search knowledge base for how-to questions
@@ -1116,6 +1119,7 @@ export class LirAgent {
     }
     if (formattedBlocks.length > 0) {
       fullSystemPrompt += `\n\n## Code from this patient\n${formattedBlocks.join('\n\n')}`;
+      console.log(`[PatientKB] Injected ${formattedBlocks.length} code block(s) into prompt context`);
     }
 
     this.session.conversationHistory.push({ role: 'user', content: userInput });
