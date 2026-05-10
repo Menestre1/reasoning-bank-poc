@@ -36,6 +36,61 @@ npx tsx chat.ts --stream
 ### Папка scratch
 Для временных файлов (тесты, бэкапы, диагностика, old data) используется папка `scratch/`. Она в `.gitignore` — файлы там не пушатся, но сохраняются локано на случай, если понадобится вспомнить результат прошлого теста.
 
+### Загрузка и поиск 1С-конфигураций
+
+Агент умеет загружать XML-выгрузки конфигураций 1С (CFE) и искать по ним код:
+
+```bash
+# Загрузить конфигурацию
+/load-config test_config/cfe
+
+# Поиск по объектам (названиям и тексту модулей)
+/search-code Номенклатура
+
+# Поиск кода BSL
+/search-code НачатьТранзакцию
+```
+
+**Структура загрузки:**
+- Парсинг XML метаданных: `Catalog`, `Document`, `DataProcessor`, `CommonModule`, `Enum`, `InformationRegister`, `ChartOfCharacteristicTypes`, `EventSubscription`
+- Чтение BSL-модулей из `Ext/ObjectModule.bsl`, `Ext/ManagerModule.bsl`, `Ext/Module.bsl`, `Ext/RecordSetModule.bsl`
+- Чтение модулей форм: `Forms/*/Ext/Form/Module.bsl`
+- Хранение в SQLite с FTS5-индексом (`unicode61` tokenizer)
+
+**Поиск:**
+1. FTS5-поиск по имени и полному тексту модуля
+2. Если FTS5 не дал результатов — LIKE-fallback (`WHERE name LIKE '%query%' OR module_full LIKE '%query%'`)
+3. Диагностика: выводится количество объектов в БД и примеры имён
+
+### Patient Knowledge Base
+
+Отдельное хранилище кода пациента (не путать с ReasoningBank):
+
+- База данных: `patient_kb.db` (отдельный файл)
+- Автоматически извлекает блоки кода из сообщений пользователя
+- Последние 3 блока кода подгружаются в контекст LLM при каждом запросе
+- LIKE-поиск по содержимому блоков (разбивка запроса на слова > 2 символов)
+- Очистка: `/next`
+
+### Тесты
+
+```bash
+# Установка vitest (если ещё не)
+npm install
+
+# Запуск тестов
+npm test
+# или
+npx vitest run
+```
+
+Suite: 15 тестов:
+- `PatientKnowledgeBase.test.ts` (7) — saveCode, findRecentCode, searchCode, clearProfile, countByProfile
+- `extractCodeBlocks.test.ts` (5) — извлечение кода из текста сообщений
+- `nextCommand.test.ts` (3) — очистка памяти пациента
+
+TypeScript: `npx tsc --noEmit` — 0 ошибок.
+
 ### Правило работы с помойкой
 **Никогда не удалять файлы — только помещать в `scratch/`.**
 
@@ -67,6 +122,10 @@ npx tsx chat.ts --stream
 | `/stats` | Статистика памяти |
 | `/lang` | Выбрать язык программирования |
 | `/learn` | Сохранить последний диалог как знание (навык) |
+| `/load-config <путь>` | Загрузить выгрузку 1С-конфигурации (XML) в БД |
+| `/search-code <запрос>` | Поиск по загруженным объектам конфигурации (FTS5 + LIKE fallback) |
+| `/semantic-search <запрос>` | Поиск по загруженным объектам через LLM + FTS (альтернативный) |
+| `/next` | Очистить память пациента (patient_kb) |
 | `/exit` | Выход |
 
 ### Многострочный ввод
@@ -484,7 +543,12 @@ ISC
 - ✅ **Multi-line input**: Пуск!/!go/send signal, /cancel, clipboard paste support
 - ✅ **Visual separators**: `=====` before response, `---` before feedback question
 - ✅ **Production-grade system prompt**: loaded from `docs/production-grade_system_prompt.md`, language consistency policy, critical rules, error handling on missing file
-- ✅ **Patient Knowledge Base**: separate SQLite DB (`patient_kb.db`), auto-saves code blocks from user messages, injects recent code into LLM context
+- ✅ **Patient Knowledge Base**: separate SQLite DB (`patient_kb.db`), auto-saves code blocks from user messages, injects recent code into LLM context, LIKE-search, `/next` command to clear
+- ✅ **ConfigLoader**: parse 1C XML metadata (Catalog, Document, DataProcessor, CommonModule, Enum, InformationRegister, ChartOfCharacteristicTypes, EventSubscription), load BSL from Ext/ and Forms/
+- ✅ **ConfigStorage**: `config_objects` table + FTS5 index (`unicode61` tokenizer), search with LIKE-fallback
+- ✅ **Commands `/load-config`, `/search-code`, `/semantic-search`**: load 1C dump, FTS-search with diagnostics, object count display
+- ✅ **Tests (15)**: PatientKnowledgeBase (7), extractCodeBlocks (5), nextCommand (3), vitest suite
+- ✅ **TypeScript**: `npx tsc --noEmit` passes with 0 errors
 - 📦 **Documentation**: updated (this file)
 - 📄 **10 новых архитектурных документов**: Execution FSM, Checkpoint Engine, ARR, REPAIR Subsystem, Cat/Seed, DEG, Memory Schema, Planner/Executor, Validation Pipeline, Skill Promotion
 - 🔄 **MainArchitecture21.md v2.1a**: L5.5/L5.7 слои, Planner/Executor, REPAIR, ARR, changelog
