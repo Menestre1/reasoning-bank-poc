@@ -1669,7 +1669,10 @@ export class LirAgent {
   private async loadConfigInBackground(dirPath: string) {
     try {
       const result = await this.configLoader!.loadDirectory(dirPath);
+      const total = await this.configStorage!.getObjectCount();
+      const samples = await this.configStorage!.getSampleNames(5);
       console.log(`[Agent] Загрузка конфигурации завершена: обработано ${result.processed} файлов, ошибок ${result.errors.length}`);
+      console.log(`[Agent] В БД config_objects: ${total} объектов. Примеры: ${samples.join(', ')}`);
     } catch (err: any) {
       console.error(`[Agent] Ошибка при загрузке конфигурации: ${err.message}`);
     }
@@ -1679,9 +1682,20 @@ export class LirAgent {
     if (!this.configStorage) {
       return this.createResponse('Конфигурация ещё не загружена. Используйте /load-config <путь> сначала.');
     }
+    const totalObjects = await this.configStorage.getObjectCount();
+    console.log(`[Search] DB has ${totalObjects} config objects, FTS query: "${query}"`);
+    if (totalObjects === 0) {
+      return this.createResponse('❌ В базе нет объектов конфигурации. Возможно, загрузка не удалась или путь указан неверно.');
+    }
     const results = await this.configStorage.searchByFTS(query);
     if (results.length === 0) {
-      return this.createResponse('Ничего не найдено.');
+      const samples = await this.configStorage.getSampleNames(5);
+      return this.createResponse(
+        `❌ По запросу "${query}" ничего не найдено.\n` +
+        `📊 Всего объектов в БД: ${totalObjects}\n` +
+        `📋 Примеры объектов: ${samples.join(', ') || '(нет данных)'}\n` +
+        `💡 Попробуйте /search-code с другим словом или /list-objects для просмотра всех объектов.`
+      );
     }
     const lines = results.slice(0, 10).map(r => `• ${r.name}: ${r.snippet.slice(0, 150)}...`);
     const response = `Найдено ${results.length} объектов:\n${lines.join('\n')}`;
@@ -1689,13 +1703,19 @@ export class LirAgent {
   }
 
   private async handleSemanticSearch(query: string) {
+    const stats = await this.memory.getStats();
+    console.log(`[SemanticSearch] Total RB entries: ${stats.totalExperiences}, query: "${query}"`);
     const results = await this.memory.retrieve(query, {
       domain: 'config-code',
       language: '1С (BSL)',
       k: 10,
     });
     if (results.length === 0) {
-      return this.createResponse('Ничего не найдено.');
+      return this.createResponse(
+        `❌ Семантический поиск не дал результатов.\n` +
+        `📊 Всего записей в памяти: ${stats.totalExperiences}\n` +
+        `💡 Попробуйте /search-code для поиска по ключевым словам (FTS).`
+      );
     }
     const lines = results.map((r: any) => {
       const exp = r.experience;

@@ -66,6 +66,16 @@ export class ConfigStorage {
     ftsStmt.run(record.name, record.moduleFull, record.id);
   }
 
+  async getObjectCount(): Promise<number> {
+    const row = this.db.prepare('SELECT COUNT(*) as cnt FROM config_objects').get() as any;
+    return row.cnt;
+  }
+
+  async getSampleNames(limit = 5): Promise<string[]> {
+    const rows = this.db.prepare('SELECT name FROM config_objects LIMIT ?').all(limit) as any[];
+    return rows.map(r => r.name);
+  }
+
   async searchByFTS(query: string, limit = 20, exact = false): Promise<{ id: string; name: string; snippet: string; rank?: number }[]> {
     let ftsQuery = query;
     if (exact && !query.startsWith('"')) {
