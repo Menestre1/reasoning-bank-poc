@@ -88,26 +88,46 @@ export class ConfigLoader {
     }
 
     const synonym = getProp('Synonym');
-    let moduleText = getProp('Module') || '';
 
-    // Try to read BSL module files from Ext subdirectory
+    // Try to read BSL module files from Ext subdirectory and Forms
+    let moduleText = getProp('Module') || '';
     const extDir = filePath.replace(/\.xml$/i, '') + '/Ext';
     const bslFiles = ['ObjectModule.bsl', 'ManagerModule.bsl', 'Module.bsl', 'RecordSetModule.bsl'];
-    if (!moduleText) {
-      for (const bslName of bslFiles) {
+    for (const bslName of bslFiles) {
+      try {
+        const bslPath = extDir + '/' + bslName;
+        const bslContent = await this.fsReader.readFile(bslPath);
+        if (bslContent.trim()) {
+          moduleText += (moduleText ? '\n\n' : '') + `// ${bslName}\n` + bslContent;
+        }
+      } catch {
+        // file not found, skip
+      }
+    }
+
+    // Also look for Form BSL modules: <object>/Forms/*/Ext/Form/Module.bsl
+    const objDir = filePath.replace(/\.xml$/i, '');
+    try {
+      const formsDir = objDir + '/Forms';
+      const formEntries = await this.fsReader.readDirectory(formsDir);
+      for (const entry of formEntries) {
+        if (!entry.isDirectory) continue;
         try {
-          const bslPath = extDir + '/' + bslName;
-          const bslContent = await this.fsReader.readFile(bslPath);
+          const formBsl = formsDir + '/' + entry.name + '/Ext/Form/Module.bsl';
+          const bslContent = await this.fsReader.readFile(formBsl);
           if (bslContent.trim()) {
-            moduleText += (moduleText ? '\n\n' : '') + `// ${bslName}\n` + bslContent;
+            moduleText += (moduleText ? '\n\n' : '') + `// Form: ${entry.name}\n` + bslContent;
           }
         } catch {
-          // file not found, skip
+          // no form module, skip
         }
       }
-      if (moduleText) {
-        console.log(`[ConfigLoader] Loaded module from Ext/ for ${name} (${moduleText.length} chars)`);
-      }
+    } catch {
+      // no Forms dir, skip
+    }
+
+    if (moduleText) {
+      console.log(`[ConfigLoader] Loaded module for ${name} (${moduleText.length} chars)`);
     }
 
     const id = `1c_${objectType}_${uuid || name.replace(/[^a-zA-Z0-9]/g, '_')}`;
