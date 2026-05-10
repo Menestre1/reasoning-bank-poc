@@ -49,6 +49,26 @@ export class PatientKnowledgeBase {
     return rows.map(r => ({ content: r.content, language: r.language }));
   }
 
+  async searchCode(patientProfile: string, query: string, limit = 5): Promise<{ content: string; language: string | null }[]> {
+    const terms = query.split(/\s+/).filter(t => t.length > 2);
+    if (terms.length === 0) return [];
+    const conditions = terms.map(() => 'content LIKE ?');
+    const params = terms.map(t => `%${t}%`);
+    const sql = `
+      SELECT content, language FROM patient_knowledge
+      WHERE patient_profile = ? AND (${conditions.join(' OR ')})
+      ORDER BY created_at DESC
+      LIMIT ?
+    `;
+    const rows = this.db.prepare(sql).all(patientProfile, ...params, limit) as any[];
+    return rows.map(r => ({ content: r.content, language: r.language }));
+  }
+
+  countByProfile(patientProfile: string): number {
+    const row = this.db.prepare('SELECT COUNT(*) as cnt FROM patient_knowledge WHERE patient_profile = ?').get(patientProfile) as any;
+    return row.cnt;
+  }
+
   clearProfile(patientProfile: string): void {
     this.db.prepare('DELETE FROM patient_knowledge WHERE patient_profile = ?').run(patientProfile);
   }

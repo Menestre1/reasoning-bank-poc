@@ -782,12 +782,21 @@ export class LirAgent {
       fullSystemPrompt += `\n\nYou are Лирь. Answer the question using ONLY the following information (do not add your own explanations):\n${knowledgeResult.content}\n\nEnd of knowledge.`;
     }
 
-    // Append patient's recent code to context
+    // Append patient's recent code and search results to context
     const patientProfile = this.session.agentId || 'default';
-    const recentCode = await this.patientKB.findRecentCode(patientProfile, 3);
-    if (recentCode.length > 0) {
-      const codeBlock = recentCode.map(c => `\`\`\`${c.language || ''}\n${c.content}\n\`\`\``).join('\n\n');
-      fullSystemPrompt += `\n\n## Recent code from this patient\n${codeBlock}`;
+    const [recentCode, searchResults] = await Promise.all([
+      this.patientKB.findRecentCode(patientProfile, 2),
+      this.patientKB.searchCode(patientProfile, userInput, 3),
+    ]);
+    const seen = new Set<string>();
+    const formattedBlocks: string[] = [];
+    for (const item of [...recentCode, ...searchResults]) {
+      if (seen.has(item.content)) continue;
+      seen.add(item.content);
+      formattedBlocks.push(`\`\`\`${item.language || ''}\n${item.content}\n\`\`\``);
+    }
+    if (formattedBlocks.length > 0) {
+      fullSystemPrompt += `\n\n## Code from this patient\n${formattedBlocks.join('\n\n')}`;
     }
 
     this.session.conversationHistory.push({ role: 'user', content: userInput });
@@ -1092,12 +1101,21 @@ export class LirAgent {
       fullSystemPrompt += `\n\nYou are Лирь. Answer the question using ONLY the following information (do not add your own explanations):\n${knowledgeResult.content}\n\nEnd of knowledge.`;
     }
 
-    // Append patient's recent code to context
+    // Append patient's recent code and search results to context
     const patientProfile = this.session.agentId || 'default';
-    const recentCode = await this.patientKB.findRecentCode(patientProfile, 3);
-    if (recentCode.length > 0) {
-      const codeBlock = recentCode.map(c => `\`\`\`${c.language || ''}\n${c.content}\n\`\`\``).join('\n\n');
-      fullSystemPrompt += `\n\n## Recent code from this patient\n${codeBlock}`;
+    const [recentCode, searchResults] = await Promise.all([
+      this.patientKB.findRecentCode(patientProfile, 2),
+      this.patientKB.searchCode(patientProfile, userInput, 3),
+    ]);
+    const seen = new Set<string>();
+    const formattedBlocks: string[] = [];
+    for (const item of [...recentCode, ...searchResults]) {
+      if (seen.has(item.content)) continue;
+      seen.add(item.content);
+      formattedBlocks.push(`\`\`\`${item.language || ''}\n${item.content}\n\`\`\``);
+    }
+    if (formattedBlocks.length > 0) {
+      fullSystemPrompt += `\n\n## Code from this patient\n${formattedBlocks.join('\n\n')}`;
     }
 
     this.session.conversationHistory.push({ role: 'user', content: userInput });

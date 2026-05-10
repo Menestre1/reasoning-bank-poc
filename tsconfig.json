@@ -61,6 +61,7 @@
     "import-skill.ts",
     "migrate-add-language-column.ts",
     "test_all_stages.ts",
-    "src/LirAgent - nollm.ts"
+    "src/LirAgent - nollm.ts",
+    "tests/**/*"
   ]
 }

@@ -180,8 +180,13 @@ async function main() {
 
       if (useStreaming) {
         console.log('\n' + '='.repeat(45));
-        process.stdout.write('🤖 Лирь: ');
+        process.stdout.write('🤖 Лирь: ⏳');
+        let isFirstChunk = true;
         result = await agent.processMessageStream(trimmed, (chunk) => {
+          if (isFirstChunk) {
+            process.stdout.write('\b \b'); // clear the ⏳
+            isFirstChunk = false;
+          }
           process.stdout.write(chunk);
         });
         process.stdout.write('\n');
