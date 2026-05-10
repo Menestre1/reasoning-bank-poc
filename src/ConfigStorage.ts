@@ -35,7 +35,7 @@ export class ConfigStorage {
       );
 
       CREATE VIRTUAL TABLE IF NOT EXISTS config_objects_fts USING fts5(
-        name, module_full, tokenize = 'russian'
+        name, module_full, tokenize = 'unicode61'
       );
 
       CREATE INDEX IF NOT EXISTS idx_config_objects_type ON config_objects(object_type);
