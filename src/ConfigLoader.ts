@@ -89,6 +89,26 @@ export class ConfigLoader {
     const synonym = getProp('Synonym');
     let moduleText = getProp('Module') || '';
 
+    // Try to read BSL module files from Ext subdirectory
+    const extDir = filePath.replace(/\.xml$/i, '') + '/Ext';
+    const bslFiles = ['ObjectModule.bsl', 'ManagerModule.bsl', 'Module.bsl', 'RecordSetModule.bsl'];
+    if (!moduleText) {
+      for (const bslName of bslFiles) {
+        try {
+          const bslPath = extDir + '/' + bslName;
+          const bslContent = await this.fsReader.readFile(bslPath);
+          if (bslContent.trim()) {
+            moduleText += (moduleText ? '\n\n' : '') + `// ${bslName}\n` + bslContent;
+          }
+        } catch {
+          // file not found, skip
+        }
+      }
+      if (moduleText) {
+        console.log(`[ConfigLoader] Loaded module from Ext/ for ${name} (${moduleText.length} chars)`);
+      }
+    }
+
     const id = `1c_${objectType}_${uuid || name.replace(/[^a-zA-Z0-9]/g, '_')}`;
     const contentForEmbedding = moduleText.slice(0, 2000);
     const hash = createHash('sha256').update(moduleText).digest('hex');

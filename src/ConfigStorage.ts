@@ -87,7 +87,7 @@ export class ConfigStorage {
         c.id,
         c.name,
         c.object_type,
-        snippet(config_objects_fts, 1, '<mark>', '</mark>', '...', 20) as snippet,
+        snippet(config_objects_fts, 1, '<mark>', '</mark>', '...', 64) as snippet,
         rank
       FROM config_objects_fts
       JOIN config_objects c ON c.rowid = config_objects_fts.rowid

@@ -1694,11 +1694,14 @@ export class LirAgent {
         `❌ По запросу "${query}" ничего не найдено.\n` +
         `📊 Всего объектов в БД: ${totalObjects}\n` +
         `📋 Примеры объектов: ${samples.join(', ') || '(нет данных)'}\n` +
-        `💡 Попробуйте /search-code с другим словом или /list-objects для просмотра всех объектов.`
+        `💡 Попробуйте /search-code с другим словом.`
       );
     }
-    const lines = results.slice(0, 10).map(r => `• ${r.name}: ${r.snippet.slice(0, 150)}...`);
-    const response = `Найдено ${results.length} объектов:\n${lines.join('\n')}`;
+    const lines = results.slice(0, 10).map(r => {
+      const snippet = r.snippet.replace(/<mark>|<\/mark>/g, '***').slice(0, 300);
+      return `• ${r.name}:\n\`\`\`bsl\n${snippet}\n\`\`\``;
+    });
+    const response = `Найдено ${results.length} объектов:\n${lines.join('\n---\n')}`;
     return this.createResponse(response);
   }
 
