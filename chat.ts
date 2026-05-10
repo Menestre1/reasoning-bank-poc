@@ -189,6 +189,9 @@ async function main() {
           }
           process.stdout.write(chunk);
         });
+        if (isFirstChunk) {
+          process.stdout.write('\b \b'); // clear the ⏳ (no streaming output)
+        }
         process.stdout.write('\n');
       } else {
         result = await agent.processMessage(trimmed);
@@ -220,6 +223,8 @@ async function main() {
       // Normal response — already printed in streaming mode
       if (!useStreaming) {
         console.log(`\n🤖 Лирь: ${result.response}`);
+      } else if (result.action === 'respond' && result.response) {
+        console.log(`🤖 Лирь: ${result.response}`);
       }
 
       if (result.warnings && result.warnings.length > 0) {
