@@ -49,6 +49,10 @@ export class PatientKnowledgeBase {
     return rows.map(r => ({ content: r.content, language: r.language }));
   }
 
+  clearProfile(patientProfile: string): void {
+    this.db.prepare('DELETE FROM patient_knowledge WHERE patient_profile = ?').run(patientProfile);
+  }
+
   close(): void {
     this.db.close();
   }

@@ -331,6 +331,13 @@ export class LirAgent {
       };
     }
 
+    // Clear patient knowledge for next patient
+    if (userInput === '/next') {
+      const profile = this.session.agentId || 'default';
+      this.patientKB.clearProfile(profile);
+      return this.createResponse('🧹 Память пациента очищена. Можно начинать с новым пациентом.');
+    }
+
     // Learn from last successful dialog (only if NOT waiting for feedback)
     if (userInput === '/learn' && !this.session.waitingForFeedback) {
       return this.handleLearn();
@@ -612,6 +619,13 @@ export class LirAgent {
         warnings: result.warnings,
         action: 'waiting_feedback',
       };
+    }
+
+    // Clear patient knowledge for next patient
+    if (userInput === '/next') {
+      const profile = this.session.agentId || 'default';
+      this.patientKB.clearProfile(profile);
+      return this.createResponse('🧹 Память пациента очищена. Можно начинать с новым пациентом.');
     }
 
     // Learn from last successful dialog
