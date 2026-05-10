@@ -1,0 +1,85 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.20">
+	<InformationRegister uuid="701bc4eb-a692-4539-b3c0-70ec5ce19ad2">
+		<InternalInfo>
+			<xr:GeneratedType name="InformationRegisterRecord.AVS_СоставКатегорийНоменклатуры" category="Record">
+				<xr:TypeId>027a19c8-45a0-488c-8192-959231f50a3d</xr:TypeId>
+				<xr:ValueId>6fad992e-e42c-448b-92d0-45216d9a41df</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="InformationRegisterManager.AVS_СоставКатегорийНоменклатуры" category="Manager">
+				<xr:TypeId>6c5b2981-b193-43a1-a21f-94b3cf3a1f8c</xr:TypeId>
+				<xr:ValueId>42de2e66-16c3-4416-a5f1-305e83d65230</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="InformationRegisterSelection.AVS_СоставКатегорийНоменклатуры" category="Selection">
+				<xr:TypeId>414aa44b-4b55-4e8d-98fe-c060ad821b3c</xr:TypeId>
+				<xr:ValueId>e46ae994-df6e-4b0a-80eb-a6281efa499a</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="InformationRegisterList.AVS_СоставКатегорийНоменклатуры" category="List">
+				<xr:TypeId>ace0cf49-7ef0-4873-98be-374dd2359047</xr:TypeId>
+				<xr:ValueId>2ab2253a-dfb0-4847-9edc-7e27ab45dc0f</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="InformationRegisterRecordSet.AVS_СоставКатегорийНоменклатуры" category="RecordSet">
+				<xr:TypeId>f8e3f754-bf0d-4010-9935-1716e1c380ef</xr:TypeId>
+				<xr:ValueId>1b3a2573-a44a-4874-bdd1-0a492105adad</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="InformationRegisterRecordKey.AVS_СоставКатегорийНоменклатуры" category="RecordKey">
+				<xr:TypeId>15906028-8144-48b9-81a4-b0a08849cab8</xr:TypeId>
+				<xr:ValueId>60ad9ba2-3820-40fd-b4b6-a41b2e8aa517</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="InformationRegisterRecordManager.AVS_СоставКатегорийНоменклатуры" category="RecordManager">
+				<xr:TypeId>9451e51d-fc3b-4c03-b817-baedd3d6d971</xr:TypeId>
+				<xr:ValueId>24c5f555-6156-4e08-a7fc-f50a2e2f79d3</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:PropertyState>
+				<xr:Property>RecordSetModule</xr:Property>
+				<xr:State>Extended</xr:State>
+			</xr:PropertyState>
+		</InternalInfo>
+		<Properties>
+			<ObjectBelonging>Adopted</ObjectBelonging>
+			<Name>AVS_СоставКатегорийНоменклатуры</Name>
+			<Comment/>
+			<ExtendedConfigurationObject>5d25dde3-801d-4915-9877-52c623bb624d</ExtendedConfigurationObject>
+			<InformationRegisterPeriodicity>Nonperiodical</InformationRegisterPeriodicity>
+			<WriteMode>Independent</WriteMode>
+		</Properties>
+		<ChildObjects>
+			<Resource uuid="d97921c8-9e9a-4dd2-b57d-b098c2bc2a51">
+				<InternalInfo/>
+				<Properties>
+					<ObjectBelonging>Adopted</ObjectBelonging>
+					<Name>СвязкаАктивна</Name>
+					<Comment/>
+					<ExtendedConfigurationObject>93bf4e03-2eba-4eb9-978c-0e6e183b9f16</ExtendedConfigurationObject>
+					<Type>
+						<v8:Type>xs:boolean</v8:Type>
+					</Type>
+				</Properties>
+			</Resource>
+			<Dimension uuid="24854961-caf0-4e46-8b70-7d1428004aeb">
+				<InternalInfo/>
+				<Properties>
+					<ObjectBelonging>Adopted</ObjectBelonging>
+					<Name>Номенклатура</Name>
+					<Comment/>
+					<ExtendedConfigurationObject>5fd9e1c1-a72a-4f80-8b39-0a2362b78dba</ExtendedConfigurationObject>
+					<Type>
+						<v8:Type>cfg:CatalogRef.Номенклатура</v8:Type>
+					</Type>
+				</Properties>
+			</Dimension>
+			<Dimension uuid="6d68aa6f-3cec-4192-8b11-18ba89e7b17a">
+				<InternalInfo/>
+				<Properties>
+					<ObjectBelonging>Adopted</ObjectBelonging>
+					<Name>Категория</Name>
+					<Comment/>
+					<ExtendedConfigurationObject>f73f7f5a-dcb0-4efa-bf14-4472609ec940</ExtendedConfigurationObject>
+					<Type>
+						<v8:Type>cfg:CatalogRef.AVS_КатегорииНоменклатурыСайт</v8:Type>
+					</Type>
+				</Properties>
+			</Dimension>
+		</ChildObjects>
+	</InformationRegister>
+</MetaDataObject>

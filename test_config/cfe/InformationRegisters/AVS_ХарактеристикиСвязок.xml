@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.20">
+	<InformationRegister uuid="bd3666da-8377-4de2-89b0-caf03a400e9d">
+		<InternalInfo>
+			<xr:GeneratedType name="InformationRegisterRecord.AVS_ХарактеристикиСвязок" category="Record">
+				<xr:TypeId>43b3906a-718d-4392-a974-883d95a528f5</xr:TypeId>
+				<xr:ValueId>0d26316d-66ce-4df2-9d03-f99361dce277</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="InformationRegisterManager.AVS_ХарактеристикиСвязок" category="Manager">
+				<xr:TypeId>6f9b2bcc-9946-4ad0-933c-225a6242d93f</xr:TypeId>
+				<xr:ValueId>c656242f-1d32-409c-ac6e-2735c92dcd06</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="InformationRegisterSelection.AVS_ХарактеристикиСвязок" category="Selection">
+				<xr:TypeId>37a9ed84-9782-42ff-82ed-4151949a6d24</xr:TypeId>
+				<xr:ValueId>bc4f737c-950e-423c-8ac3-79195bda3bdc</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="InformationRegisterList.AVS_ХарактеристикиСвязок" category="List">
+				<xr:TypeId>45e97684-9322-4bb9-aea5-ec3c8c68530f</xr:TypeId>
+				<xr:ValueId>328fd0e7-efdb-4280-a51b-fa5ad82fd4ac</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="InformationRegisterRecordSet.AVS_ХарактеристикиСвязок" category="RecordSet">
+				<xr:TypeId>0fc581cf-7fb7-47dc-8be7-b20220ac45c2</xr:TypeId>
+				<xr:ValueId>cb76cde1-9e39-4af6-b8a8-bb2e871eadd3</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="InformationRegisterRecordKey.AVS_ХарактеристикиСвязок" category="RecordKey">
+				<xr:TypeId>8d652ff4-b4b5-4c91-9aae-82c3507203e4</xr:TypeId>
+				<xr:ValueId>81fd5690-c443-40a3-968f-1a35905c57c1</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="InformationRegisterRecordManager.AVS_ХарактеристикиСвязок" category="RecordManager">
+				<xr:TypeId>24a3e685-ab5f-4972-b0be-708e85121cc4</xr:TypeId>
+				<xr:ValueId>9654e515-3352-48f3-ad14-fca9841602f7</xr:ValueId>
+			</xr:GeneratedType>
+		</InternalInfo>
+		<Properties>
+			<ObjectBelonging>Adopted</ObjectBelonging>
+			<Name>AVS_ХарактеристикиСвязок</Name>
+			<Comment/>
+			<ExtendedConfigurationObject>5987d773-376e-4fec-9774-3734b252ab1e</ExtendedConfigurationObject>
+			<InformationRegisterPeriodicity>Nonperiodical</InformationRegisterPeriodicity>
+			<WriteMode>Independent</WriteMode>
+		</Properties>
+		<ChildObjects/>
+	</InformationRegister>
+</MetaDataObject>

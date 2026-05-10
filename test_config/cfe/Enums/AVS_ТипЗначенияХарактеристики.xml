@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.20">
+	<Enum uuid="0f1c664a-dd11-487a-b566-f3a57e33cd9e">
+		<InternalInfo>
+			<xr:GeneratedType name="EnumRef.AVS_ТипЗначенияХарактеристики" category="Ref">
+				<xr:TypeId>4cb26cb6-6eb9-4c09-8f01-88492be8a65f</xr:TypeId>
+				<xr:ValueId>3ca6cc5a-3d2b-404d-8cc1-3932d1ae1c6c</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="EnumManager.AVS_ТипЗначенияХарактеристики" category="Manager">
+				<xr:TypeId>773df6f4-efe5-4325-b5c7-6fe51244c15c</xr:TypeId>
+				<xr:ValueId>ead56e3b-ef81-4ec5-8410-5d22e887c6c9</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="EnumList.AVS_ТипЗначенияХарактеристики" category="List">
+				<xr:TypeId>450c8155-136b-423d-82fb-521ba64dfc0e</xr:TypeId>
+				<xr:ValueId>8675056b-ca46-4caf-b175-adadece55bea</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:PropertyState>
+				<xr:Property>ManagerModule</xr:Property>
+				<xr:State>Extended</xr:State>
+			</xr:PropertyState>
+		</InternalInfo>
+		<Properties>
+			<ObjectBelonging>Adopted</ObjectBelonging>
+			<Name>AVS_ТипЗначенияХарактеристики</Name>
+			<Comment/>
+			<ExtendedConfigurationObject>86744618-1e6c-4059-869c-efa34b505104</ExtendedConfigurationObject>
+		</Properties>
+		<ChildObjects/>
+	</Enum>
+</MetaDataObject>

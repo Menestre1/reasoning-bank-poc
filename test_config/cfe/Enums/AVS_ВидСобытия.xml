@@ -1,0 +1,26 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.20">
+	<Enum uuid="4fa5d45b-8c31-4c01-86cb-53180be4f6df">
+		<InternalInfo>
+			<xr:GeneratedType name="EnumRef.AVS_ВидСобытия" category="Ref">
+				<xr:TypeId>52fa482f-6377-45e2-8a8c-e09f006b5076</xr:TypeId>
+				<xr:ValueId>c1a8257d-807c-4f87-a0d7-e6c8fdaba3e2</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="EnumManager.AVS_ВидСобытия" category="Manager">
+				<xr:TypeId>9634fd82-7b40-4523-9dbd-ae0a4115cd96</xr:TypeId>
+				<xr:ValueId>eda98563-c75d-4c69-9d39-e8b83f8a36ce</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="EnumList.AVS_ВидСобытия" category="List">
+				<xr:TypeId>37aa6bea-4126-43ba-ba27-753ff1fa42d8</xr:TypeId>
+				<xr:ValueId>7ffb97be-f290-48a9-ac2c-14aecf1cefb6</xr:ValueId>
+			</xr:GeneratedType>
+		</InternalInfo>
+		<Properties>
+			<ObjectBelonging>Adopted</ObjectBelonging>
+			<Name>AVS_ВидСобытия</Name>
+			<Comment/>
+			<ExtendedConfigurationObject>9d35452d-a2ed-4b57-bd51-c759030ee5a2</ExtendedConfigurationObject>
+		</Properties>
+		<ChildObjects/>
+	</Enum>
+</MetaDataObject>
