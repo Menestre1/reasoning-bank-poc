@@ -77,12 +77,13 @@ export class ConfigStorage {
   }
 
   async searchByFTS(query: string, limit = 20, exact = false): Promise<{ id: string; name: string; snippet: string; rank?: number }[]> {
+    // Try FTS first
     let ftsQuery = query;
     if (exact && !query.startsWith('"')) {
       ftsQuery = `"${query}"`;
     }
 
-    const stmt = this.db.prepare(`
+    const ftsStmt = this.db.prepare(`
       SELECT
         c.id,
         c.name,
@@ -95,12 +96,36 @@ export class ConfigStorage {
       ORDER BY rank
       LIMIT ?
     `);
-    const rows = stmt.all(ftsQuery, limit) as any[];
-    return rows.map(row => ({
+    let rows: any[];
+    try {
+      rows = ftsStmt.all(ftsQuery, limit) as any[];
+    } catch {
+      rows = [];
+    }
+
+    if (rows.length > 0) {
+      return rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        snippet: (row.snippet || '').slice(0, 300),
+        rank: row.rank,
+      }));
+    }
+
+    // Fallback: LIKE search on name and module_full
+    const likePattern = `%${query}%`;
+    const likeStmt = this.db.prepare(`
+      SELECT id, name, substr(module_full, 1, 300) as snippet
+      FROM config_objects
+      WHERE name LIKE ? OR module_full LIKE ?
+      LIMIT ?
+    `);
+    const likeRows = likeStmt.all(likePattern, likePattern, limit) as any[];
+    return likeRows.map(row => ({
       id: row.id,
       name: row.name,
-      snippet: (row.snippet || '').slice(0, 300),
-      rank: row.rank,
+      snippet: row.snippet || '',
+      rank: 0,
     }));
   }
 

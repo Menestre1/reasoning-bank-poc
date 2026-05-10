@@ -48,6 +48,7 @@ export class ConfigLoader {
           }
         } catch (err: any) {
           errors.push(`${filePath}: ${err.message}`);
+          if (errors.length <= 3) console.log(`[ConfigLoader] ERROR: ${filePath}: ${err.message}`);
         }
       })
     );
