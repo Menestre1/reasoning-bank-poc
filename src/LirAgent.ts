@@ -1921,8 +1921,25 @@ export class LirAgent {
       const result = await this.configLoader!.loadDirectory(targetPath);
       const total = await this.configStorage!.getObjectCount();
       const samples = await this.configStorage!.getSampleNames(5);
-      const msg = `✅ Конфигурация загружена: обработано ${result.processed} файлов, ошибок ${result.errors.length}, в БД ${total} объектов. Примеры: ${samples.join(', ')}`;
+      const objectsList = samples.join(', ');
+      const msg = `✅ Конфигурация загружена: обработано ${result.processed} файлов, ошибок ${result.errors.length}, в БД ${total} объектов. Примеры: ${objectsList}`;
       console.log(`[Agent] ${msg}`);
+      // Record dynamic knowledge entry so agent can answer "what's loaded?"
+      try {
+        await this.memory.recordExperience({
+          id: `config-loaded-${Date.now()}`,
+          task: `Загруженная конфигурация из ${targetPath}`,
+          outcome: 'success',
+          content: `Загружена конфигурация из ${targetPath}. В ней ${total} объектов: ${objectsList}. Модули сохранены в FTS5-индекс. Для поиска кода используйте /search-code.`,
+          domain: 'knowledge',
+          error_type: 'none',
+          confidence: 0.95,
+          metadata: { is_skill: true, language: '1С (BSL)', description: 'Информация о загруженной конфигурации' },
+          user_input: 'загруженная конфигурация что загружено какие объекты',
+        });
+      } catch (err: any) {
+        console.log(`[Agent] Warning: could not record config knowledge entry: ${err.message}`);
+      }
       return this.createResponse(`${msg}\n\n📌 Для поиска кода используйте /search-code <запрос>\nМожно работать.`);
     } catch (err: any) {
       return this.createResponse(`❌ Ошибка: ${err.message}`);
