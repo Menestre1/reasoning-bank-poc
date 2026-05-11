@@ -360,6 +360,16 @@ export class LirAgent {
         const result = await this.memory.clearByDomain(domain);
         if (result.deleted > 0) cleared.push(`${domain} (${result.deleted})`);
       }
+      // Null out lazy-initialized components so they are re-created fresh on next use
+      this.configStorage = undefined;
+      this.configLoader = undefined;
+      this.depGraph = undefined;
+      this.depParser = undefined;
+      this.codeAnalyzer = undefined;
+      this.compStorage = undefined;
+      this.comparator = undefined;
+      this.perfStorage = undefined;
+      this.perfLoader = undefined;
       this.session.conversationHistory = [];
       this.session.lastDetectedLanguage = undefined;
       this.session.lastUserInput = '';
@@ -686,6 +696,16 @@ export class LirAgent {
         const result = await this.memory.clearByDomain(domain);
         if (result.deleted > 0) cleared.push(`${domain} (${result.deleted})`);
       }
+      // Null out lazy-initialized components so they are re-created fresh on next use
+      this.configStorage = undefined;
+      this.configLoader = undefined;
+      this.depGraph = undefined;
+      this.depParser = undefined;
+      this.codeAnalyzer = undefined;
+      this.compStorage = undefined;
+      this.comparator = undefined;
+      this.perfStorage = undefined;
+      this.perfLoader = undefined;
       this.session.conversationHistory = [];
       this.session.lastDetectedLanguage = undefined;
       this.session.lastUserInput = '';
