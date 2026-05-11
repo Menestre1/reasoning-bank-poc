@@ -894,18 +894,18 @@ export class LirAgent {
       seen.add(item.content);
       formattedBlocks.push(`\`\`\`${item.language || ''}\n${item.content}\n\`\`\``);
     }
-    // Also search loaded config objects
-    if (this.configStorage) {
-      try {
-        const configResults = await this.configStorage.searchByFTS(userInput, 3);
-        for (const r of configResults) {
-          if (seen.has(r.snippet)) continue;
-          seen.add(r.snippet);
-          formattedBlocks.push(`// ${r.name}\n\`\`\`bsl\n${r.snippet}\n\`\`\``);
-        }
-      } catch (err: any) {
-        console.log(`[ConfigStorage] Search error (non-fatal): ${err.message}`);
+    // Semantic search over loaded config modules (domain=config-code)
+    try {
+      const configResults = await this.memory.retrieve(userInput, { domain: 'config-code', k: 3 });
+      for (const r of configResults) {
+        const exp = r.experience;
+        if (!exp.content || r.similarity < 0.4) continue;
+        if (seen.has(exp.content)) continue;
+        seen.add(exp.content);
+        formattedBlocks.push(`// ${exp.task}\n\`\`\`bsl\n${exp.content}\n\`\`\``);
       }
+    } catch (err: any) {
+      console.log(`[Config] Semantic search error (non-fatal): ${err.message}`);
     }
     if (formattedBlocks.length > 0) {
       fullSystemPrompt += `\n\n## Code from this patient\n${formattedBlocks.join('\n\n')}`;
@@ -1228,18 +1228,18 @@ export class LirAgent {
       seen.add(item.content);
       formattedBlocks.push(`\`\`\`${item.language || ''}\n${item.content}\n\`\`\``);
     }
-    // Also search loaded config objects
-    if (this.configStorage) {
-      try {
-        const configResults = await this.configStorage.searchByFTS(userInput, 3);
-        for (const r of configResults) {
-          if (seen.has(r.snippet)) continue;
-          seen.add(r.snippet);
-          formattedBlocks.push(`// ${r.name}\n\`\`\`bsl\n${r.snippet}\n\`\`\``);
-        }
-      } catch (err: any) {
-        console.log(`[ConfigStorage] Search error (non-fatal): ${err.message}`);
+    // Semantic search over loaded config modules (domain=config-code)
+    try {
+      const configResults = await this.memory.retrieve(userInput, { domain: 'config-code', k: 3 });
+      for (const r of configResults) {
+        const exp = r.experience;
+        if (!exp.content || r.similarity < 0.4) continue;
+        if (seen.has(exp.content)) continue;
+        seen.add(exp.content);
+        formattedBlocks.push(`// ${exp.task}\n\`\`\`bsl\n${exp.content}\n\`\`\``);
       }
+    } catch (err: any) {
+      console.log(`[Config] Semantic search error (non-fatal): ${err.message}`);
     }
     if (formattedBlocks.length > 0) {
       fullSystemPrompt += `\n\n## Code from this patient\n${formattedBlocks.join('\n\n')}`;
