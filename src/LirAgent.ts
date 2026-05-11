@@ -881,7 +881,7 @@ export class LirAgent {
       fullSystemPrompt += `\n\nYou are Лирь. Answer the question using ONLY the following information (do not add your own explanations):\n${knowledgeResult.content}\n\nEnd of knowledge.`;
     }
 
-    // Append patient's recent code and search results to context
+    // Append code from patient messages and loaded config to context
     const patientProfile = this.session.agentId || 'default';
     const [recentCode, searchResults] = await Promise.all([
       this.patientKB.findRecentCode(patientProfile, 2),
@@ -894,25 +894,22 @@ export class LirAgent {
       seen.add(item.content);
       formattedBlocks.push(`\`\`\`${item.language || ''}\n${item.content}\n\`\`\``);
     }
-    if (formattedBlocks.length > 0) {
-      fullSystemPrompt += `\n\n## Code from this patient\n${formattedBlocks.join('\n\n')}`;
-      console.log(`[PatientKB] Injected ${formattedBlocks.length} code block(s) into prompt context`);
-    }
-
-    // Also search loaded config objects for relevant code
+    // Also search loaded config objects
     if (this.configStorage) {
       try {
         const configResults = await this.configStorage.searchByFTS(userInput, 3);
-        if (configResults.length > 0) {
-          const configBlocks = configResults.map(r =>
-            `**${r.name}**\n\`\`\`bsl\n${r.snippet}\n\`\`\``
-          );
-          fullSystemPrompt += `\n\n## Code from loaded configuration\n${configBlocks.join('\n\n')}`;
-          console.log(`[ConfigStorage] Injected ${configResults.length} config code snippet(s) into prompt context`);
+        for (const r of configResults) {
+          if (seen.has(r.snippet)) continue;
+          seen.add(r.snippet);
+          formattedBlocks.push(`// ${r.name}\n\`\`\`bsl\n${r.snippet}\n\`\`\``);
         }
       } catch (err: any) {
         console.log(`[ConfigStorage] Search error (non-fatal): ${err.message}`);
       }
+    }
+    if (formattedBlocks.length > 0) {
+      fullSystemPrompt += `\n\n## Code from this patient\n${formattedBlocks.join('\n\n')}`;
+      console.log(`[Code] Injected ${formattedBlocks.length} code block(s) into prompt context (patient + config)`);
     }
 
     this.session.conversationHistory.push({ role: 'user', content: userInput });
@@ -1218,7 +1215,7 @@ export class LirAgent {
       fullSystemPrompt += `\n\nYou are Лирь. Answer the question using ONLY the following information (do not add your own explanations):\n${knowledgeResult.content}\n\nEnd of knowledge.`;
     }
 
-    // Append patient's recent code and search results to context
+    // Append code from patient messages and loaded config to context
     const patientProfile = this.session.agentId || 'default';
     const [recentCode, searchResults] = await Promise.all([
       this.patientKB.findRecentCode(patientProfile, 2),
@@ -1231,25 +1228,22 @@ export class LirAgent {
       seen.add(item.content);
       formattedBlocks.push(`\`\`\`${item.language || ''}\n${item.content}\n\`\`\``);
     }
-    if (formattedBlocks.length > 0) {
-      fullSystemPrompt += `\n\n## Code from this patient\n${formattedBlocks.join('\n\n')}`;
-      console.log(`[PatientKB] Injected ${formattedBlocks.length} code block(s) into prompt context`);
-    }
-
-    // Also search loaded config objects for relevant code
+    // Also search loaded config objects
     if (this.configStorage) {
       try {
         const configResults = await this.configStorage.searchByFTS(userInput, 3);
-        if (configResults.length > 0) {
-          const configBlocks = configResults.map(r =>
-            `**${r.name}**\n\`\`\`bsl\n${r.snippet}\n\`\`\``
-          );
-          fullSystemPrompt += `\n\n## Code from loaded configuration\n${configBlocks.join('\n\n')}`;
-          console.log(`[ConfigStorage] Injected ${configResults.length} config code snippet(s) into prompt context`);
+        for (const r of configResults) {
+          if (seen.has(r.snippet)) continue;
+          seen.add(r.snippet);
+          formattedBlocks.push(`// ${r.name}\n\`\`\`bsl\n${r.snippet}\n\`\`\``);
         }
       } catch (err: any) {
         console.log(`[ConfigStorage] Search error (non-fatal): ${err.message}`);
       }
+    }
+    if (formattedBlocks.length > 0) {
+      fullSystemPrompt += `\n\n## Code from this patient\n${formattedBlocks.join('\n\n')}`;
+      console.log(`[Code] Injected ${formattedBlocks.length} code block(s) into prompt context (patient + config)`);
     }
 
     this.session.conversationHistory.push({ role: 'user', content: userInput });
