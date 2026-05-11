@@ -165,7 +165,7 @@ export class ReasoningBankSemantic {
     this.stmtGetById = this.db.prepare('SELECT * FROM rb_experiences WHERE id = ?');
     this.stmtUpdateExperience = this.db.prepare('UPDATE rb_experiences SET consecutive_successes = consecutive_successes + 1, usage_count = usage_count + 1 WHERE id = ?');
     this.stmtUpdateSkill = this.db.prepare('UPDATE rb_experiences SET is_skill = 1, consecutive_successes = consecutive_successes + 1, usage_count = usage_count + 1 WHERE id = ?');
-    this.stmtInsert = this.db.prepare(`INSERT INTO rb_experiences (id, task, outcome, content, domain, error_type, confidence, consecutive_successes, is_skill, user_input, metadata, expires_at, embedding, language) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    this.stmtInsert = this.db.prepare(`INSERT OR IGNORE INTO rb_experiences (id, task, outcome, content, domain, error_type, confidence, consecutive_successes, is_skill, user_input, metadata, expires_at, embedding, language) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     this.stmtDeleteExpired = this.db.prepare(`DELETE FROM rb_experiences WHERE expires_at IS NOT NULL AND expires_at < datetime('now') AND is_skill = 0`);
     this.stmtSelectAll = this.db.prepare('SELECT * FROM rb_experiences');
     this.stmtSelectCount = this.db.prepare('SELECT COUNT(*) as c FROM rb_experiences');

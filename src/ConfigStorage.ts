@@ -150,8 +150,9 @@ export class ConfigStorage {
   }
 
   async clearAll(): Promise<void> {
-    this.db.exec('DELETE FROM config_objects_fts');
+    this.db.exec('DROP TABLE IF EXISTS config_objects_fts');
     this.db.exec('DELETE FROM config_objects');
+    this.initTables();
   }
 
   getSearchStats(): { ftsQueries: number; ftsAvgMs: number; likeQueries: number; likeAvgMs: number; totalQueries: number } {

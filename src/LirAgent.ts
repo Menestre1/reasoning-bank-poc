@@ -241,6 +241,7 @@ export class LirAgent {
   }
 
   async processMessage(userInput: string): Promise<any> {
+    userInput = this.normalizeCommand(userInput);
     // Обработка команд загрузки и поиска
     if (userInput.startsWith('/load-config')) {
       const targetPath = userInput.slice(13).trim();
@@ -577,6 +578,7 @@ export class LirAgent {
     userInput: string,
     onChunk?: (chunk: string) => void
   ): Promise<any> {
+    userInput = this.normalizeCommand(userInput);
     // === Command handlers (same as processMessage lines 236-327) ===
     if (userInput.startsWith('/load-config')) {
       const targetPath = userInput.slice(13).trim();
@@ -1824,6 +1826,51 @@ export class LirAgent {
     }
   }
 
+  private levenshtein(a: string, b: string): number {
+    const m = a.length;
+    const n = b.length;
+    const size = (m + 1) * (n + 1);
+    const dp = new Int32Array(size);
+    for (let i = 0; i <= m; i++) dp[i * (n + 1)] = i;
+    for (let j = 0; j <= n; j++) dp[j] = j;
+    for (let i = 1; i <= m; i++) {
+      const ai = a[i - 1];
+      for (let j = 1; j <= n; j++) {
+        const idx = i * (n + 1) + j;
+        const cost = ai === b[j - 1] ? 0 : 1;
+        dp[idx] = Math.min(
+          dp[(i - 1) * (n + 1) + j]! + 1,
+          dp[i * (n + 1) + (j - 1)]! + 1,
+          dp[(i - 1) * (n + 1) + (j - 1)]! + cost
+        );
+      }
+    }
+    return dp[m * (n + 1) + n]!;
+  }
+
+  private normalizeCommand(input: string): string {
+    const knownCommands = ['/load-config', '/search-code', '/semantic-search', '/load-measurements', '/top-slow', '/next', '/learn', '/help'];
+    if (!input.startsWith('/') || knownCommands.some(c => input.startsWith(c + ' ') || input === c)) return input;
+    const firstSpace = input.indexOf(' ');
+    const firstToken = firstSpace >= 0 ? input.substring(0, firstSpace) : input;
+    const rest = firstSpace >= 0 ? input.substring(firstSpace) : '';
+    let bestMatch: string | null = null;
+    let bestDistance = Infinity;
+    for (const cmd of knownCommands) {
+      const dist = this.levenshtein(firstToken, cmd);
+      const threshold = Math.max(1, Math.floor(cmd.length / 3));
+      if (dist <= threshold && dist < bestDistance) {
+        bestDistance = dist;
+        bestMatch = cmd;
+      }
+    }
+    if (bestMatch) {
+      console.log(`[LirAgent] Command autocorrect: "${input}" -> "${bestMatch + rest}"`);
+      return bestMatch + rest;
+    }
+    return input;
+  }
+
   private createResponse(message: string): {
     response: string;
     fullPrompt: string;
@@ -1845,22 +1892,14 @@ export class LirAgent {
         this.configStorage = new ConfigStorage(this.dbPath);
         this.configLoader = new ConfigLoader(this.memory, this.configStorage, this.fsReader);
       }
-      this.loadConfigInBackground(targetPath);
-      return this.createResponse(`🔄 Начинаю анализ конфигурации в ${targetPath}. Это может занять несколько минут. Результат будет сообщён.`);
-    } catch (err: any) {
-      return this.createResponse(`❌ Ошибка: ${err.message}`);
-    }
-  }
-
-  private async loadConfigInBackground(dirPath: string) {
-    try {
-      const result = await this.configLoader!.loadDirectory(dirPath);
+      const result = await this.configLoader!.loadDirectory(targetPath);
       const total = await this.configStorage!.getObjectCount();
       const samples = await this.configStorage!.getSampleNames(5);
-      console.log(`[Agent] Загрузка конфигурации завершена: обработано ${result.processed} файлов, ошибок ${result.errors.length}`);
-      console.log(`[Agent] В БД config_objects: ${total} объектов. Примеры: ${samples.join(', ')}`);
+      const msg = `✅ Конфигурация загружена: обработано ${result.processed} файлов, ошибок ${result.errors.length}, в БД ${total} объектов. Примеры: ${samples.join(', ')}`;
+      console.log(`[Agent] ${msg}`);
+      return this.createResponse(`${msg}\n\n📌 Для поиска кода используйте /search-code <запрос>\nМожно работать.`);
     } catch (err: any) {
-      console.error(`[Agent] Ошибка при загрузке конфигурации: ${err.message}`);
+      return this.createResponse(`❌ Ошибка: ${err.message}`);
     }
   }
 
@@ -1928,7 +1967,8 @@ export class LirAgent {
         `Файлов: ${result.totalFiles}\n` +
         `Загружено записей: ${result.loaded}\n` +
         `Ошибок: ${result.errors.length}\n` +
-        `Время: ${(result.durationMs / 1000).toFixed(2)}с`
+        `Время: ${(result.durationMs / 1000).toFixed(2)}с\n\n` +
+        `Можно работать.`
       );
     } catch (err: any) {
       return this.createResponse(`❌ Ошибка: ${err.message}`);
@@ -2202,73 +2242,40 @@ export class LirAgent {
   async seedTools(): Promise<void> {
     try {
       await this.memory.ensureInitialized();
-      
-      const tools = await this.memory.getToolsByDomain('tool');
-      if (tools.length > 0) {
-        console.log(`✅ Tools already seeded: ${tools.length}`);
-        return;
-      }
 
-      console.log('🌱 Seeding tools into DB...');
-      
-      const toolsToSeed = [
-        {
-          id: 'tool-ping',
-          task: 'ping',
-          content: 'Simple ping tool. Use when user asks to ping or test connectivity.',
-          domain: 'tool',
-          metadata: {
-            tool: {
-              type: 'node',
-              path: 'tools/ping.js',
-              args_template: '',
-              confirm: true,
-              timeout_sec: 10,
-            }
-          },
-        },
-        {
-          id: 'tool-extract-my-code',
-          task: 'extract-my-code',
-          content: 'Extract code from 1C module with markers. Use when user says: extract code, извлечь код, выдели код, найди процедуры, extract my code, get procedures from file, separate code from configuration. Works with 1C .txt files with AVS and Kosmachev markers.',
-          domain: 'tool',
-          metadata: {
-            tool: {
-              type: 'python',
-              path: 'tools/extract_my_code.py',
-              args_template: '--input {input} --output {output}',
-              param_patterns: {
-                input: '(\\S+\\.\\w+)',  // matches filename with extension
-                output: '(\\S+\\.\\w+)?',  // optional output file
-              },
-              confirm: true,
-              timeout_sec: 60,
-            }
-          },
-        },
-      ];
-
-      for (const tool of toolsToSeed) {
-        try {
-          await this.memory.recordExperience({
-            id: tool.id,
-            task: tool.task,
-            outcome: 'success',
-            content: tool.content,
+      const existingTools = await this.memory.getToolsByDomain('tool');
+      if (existingTools.length === 0) {
+        console.log('🌱 Seeding tools into DB...');
+        const toolsToSeed = [
+          {
+            id: 'tool-ping',
+            task: 'ping',
+            content: 'Simple ping tool. Use when user asks to ping or test connectivity.',
             domain: 'tool',
-            error_type: 'none',
-            confidence: 0.95,
-            metadata: tool.metadata,
-          });
-          console.log(`  ✓ Seeded: ${tool.task}`);
-        } catch (err: any) {
-          console.log(`  ✗ Error seeding ${tool.task}:`, err.message);
+            metadata: { tool: { type: 'node', path: 'tools/ping.js', args_template: '', confirm: true, timeout_sec: 10 } },
+          },
+          {
+            id: 'tool-extract-my-code',
+            task: 'extract-my-code',
+            content: 'Extract code from 1C module with markers. Use when user says: extract code, извлечь код, выдели код, найди процедуры, extract my code, get procedures from file, separate code from configuration. Works with 1C .txt files with AVS and Kosmachev markers.',
+            domain: 'tool',
+            metadata: { tool: { type: 'python', path: 'tools/extract_my_code.py', args_template: '--input {input} --output {output}', param_patterns: { input: '(\\S+\\.\\w+)', output: '(\\S+\\.\\w+)?' }, confirm: true, timeout_sec: 60 } },
+          },
+        ];
+        for (const tool of toolsToSeed) {
+          try {
+            await this.memory.recordExperience({ id: tool.id, task: tool.task, outcome: 'success', content: tool.content, domain: 'tool', error_type: 'none', confidence: 0.95, metadata: tool.metadata });
+            console.log(`  ✓ Seeded: ${tool.task}`);
+          } catch (err: any) {
+            console.log(`  ✗ Error seeding ${tool.task}:`, err.message);
+          }
         }
+        console.log('✅ Tools seeded successfully');
+      } else {
+        console.log(`✅ Tools already seeded: ${existingTools.length}`);
       }
 
-      console.log('✅ Tools seeded successfully');
-
-      // Seed knowledge base
+      // Always seed/update knowledge files (new files added, existing get deduped by id)
       const knowledgeFiles = await this.getKnowledgeFiles();
       if (knowledgeFiles.length > 0) {
         console.log('🌱 Seeding knowledge base...');
