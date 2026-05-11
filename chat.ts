@@ -32,6 +32,7 @@ const PROMPTS = {
   • /model             — сменить модель Ollama
   • /models            — список доступных моделей
   • /lang              — выбрать язык программирования
+  • /auto-search on|off — вкл/выкл автоматический семантический поиск кода
   • /exit или Ctrl+C   — выход`,
 
   langChoice: `

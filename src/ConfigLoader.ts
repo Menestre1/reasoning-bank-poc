@@ -1,6 +1,8 @@
 import { createHash } from 'crypto';
 import { XMLParser } from 'fast-xml-parser';
+import * as path from 'path';
 import pLimit from 'p-limit';
+import { OllamaClient } from './OllamaClient.js';
 import { ReasoningBankSemantic } from './ReasoningBankSemantic.js';
 import { ConfigStorage, type ConfigObjectRecord } from './ConfigStorage.js';
 import { SafeFileSystemReader } from './SafeFileSystemReader.js';
@@ -17,11 +19,13 @@ export class ConfigLoader {
   private storage: ConfigStorage;
   private fsReader: SafeFileSystemReader;
   private parser: XMLParser;
+  private llmClient?: OllamaClient;
 
-  constructor(rb: ReasoningBankSemantic, storage: ConfigStorage, fsReader: SafeFileSystemReader) {
+  constructor(rb: ReasoningBankSemantic, storage: ConfigStorage, fsReader: SafeFileSystemReader, llmClient?: OllamaClient) {
     this.rb = rb;
     this.storage = storage!;
     this.fsReader = fsReader;
+    this.llmClient = llmClient;
     this.parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: '@_',
@@ -66,8 +70,11 @@ export class ConfigLoader {
     if (!meta) return;
 
     // Find the object-type child (Catalog, Document, etc.)
-    const typeKey = Object.keys(meta).find(k => k !== '@_type' && k !== '@_uuid');
-    const obj = typeKey ? meta[typeKey] : null;
+    const attrType = meta['@_type'];
+    const typeKey = attrType || Object.keys(meta).find(k => k !== '@_type' && k !== '@_uuid');
+    if (!typeKey) return;
+
+    const obj = attrType ? meta : meta[typeKey];
     if (!obj) return;
 
     const objectType = `1C.${typeKey}`;
@@ -75,23 +82,33 @@ export class ConfigLoader {
     const props = obj.Properties || {};
 
     const getProp = (name: string): string => {
-      const val = props[name];
-      if (typeof val === 'string') return val;
-      if (val && typeof val === 'object') return val['#text'] || '';
+      // Format 1: <Name>value</Name>
+      const direct = props[name];
+      if (typeof direct === 'string') return direct;
+      if (direct && typeof direct === 'object') return direct['#text'] || '';
+      // Format 2: <Property Name="Name">value</Property> (real 1C export)
+      if (Array.isArray(props.Property)) {
+        const found = props.Property.find((p: any) => p['@_Name'] === name);
+        if (found) return found['#text'] || '';
+      }
+      if (props.Property && typeof props.Property === 'object' && !Array.isArray(props.Property)) {
+        if (props.Property['@_Name'] === name) return props.Property['#text'] || '';
+      }
       return '';
     };
 
     const name = getProp('Name');
     if (!name) {
-      console.log(`[ConfigLoader] Skipping ${filePath}: no Name in properties (keys=${Object.keys(props).join(',')})`);
+      console.log(`[ConfigLoader] Skipping ${filePath}: no Name in properties (typeKey=${typeKey})`);
       return;
     }
 
     const synonym = getProp('Synonym');
+    const parentDir = path.dirname(filePath);
 
     // Try to read BSL module files from Ext subdirectory and Forms
     let moduleText = getProp('Module') || '';
-    const extDir = filePath.replace(/\.xml$/i, '') + '/Ext';
+    const extDir = parentDir + '/Ext';
     const bslFiles = ['ObjectModule.bsl', 'ManagerModule.bsl', 'Module.bsl', 'RecordSetModule.bsl'];
     for (const bslName of bslFiles) {
       try {
@@ -105,8 +122,8 @@ export class ConfigLoader {
       }
     }
 
-    // Also look for Form BSL modules: <object>/Forms/*/Ext/Form/Module.bsl
-    const objDir = filePath.replace(/\.xml$/i, '');
+    // Also look for Form BSL modules: <parentDir>/Forms/*/Ext/Form/Module.bsl
+    const objDir = parentDir;
     try {
       const formsDir = objDir + '/Forms';
       const formEntries = await this.fsReader.readDirectory(formsDir);
@@ -129,6 +146,7 @@ export class ConfigLoader {
     if (moduleText) {
       console.log(`[ConfigLoader] Loaded module for ${name} (${moduleText.length} chars)`);
     }
+    console.log(`[ConfigLoader] Saving ${objectType}.${name} to RB (domain=config-code)`);
 
     const id = `1c_${objectType}_${uuid || name.replace(/[^a-zA-Z0-9]/g, '_')}`;
     const contentForEmbedding = moduleText.slice(0, 2000);
@@ -152,6 +170,19 @@ export class ConfigLoader {
        },
     });
 
+    // Compute Ollama embedding for semantic search
+    let ollamaEmbedding: Buffer | undefined;
+    if (this.llmClient && moduleText) {
+      try {
+        const emb = await this.llmClient.getEmbedding(contentForEmbedding);
+        if (emb.length > 0) {
+          ollamaEmbedding = Buffer.from(new Float32Array(emb).buffer);
+        }
+      } catch (err: any) {
+        console.log(`[ConfigLoader] Ollama embedding unavailable for ${name}: ${err.message}`);
+      }
+    }
+
     const record: ConfigObjectRecord = {
       id: rbId,
       objectType,
@@ -161,6 +192,7 @@ export class ConfigLoader {
       filePath,
       sizeBytes: Buffer.byteLength(moduleText, 'utf8'),
       hash,
+      ollamaEmbedding,
     };
     await this.storage.saveObject(record);
   }

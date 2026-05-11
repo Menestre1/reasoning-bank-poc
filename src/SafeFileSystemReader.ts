@@ -53,7 +53,7 @@ export class SafeFileSystemReader {
       for (const entry of entries) {
         if (entry.isDirectory) {
           stack.push(entry.fullPath);
-        } else if (entry.name.endsWith('.xml') && !entry.name.includes('Form')) {
+        } else if (entry.name.endsWith('.xml') && !entry.fullPath.includes('/Forms/') && !entry.fullPath.includes('\\Forms\\')) {
           xmlFiles.push(entry.fullPath);
         }
       }

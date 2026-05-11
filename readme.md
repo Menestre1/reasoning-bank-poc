@@ -30,13 +30,29 @@ npx tsx chat.ts --stream
 
 | Команда | Действие |
 |---------|----------|
-| `/help` | Справка |
+| `/help` или `/tools` | Справка по инструментам |
 | `/models` | Список моделей Ollama |
 | `/model <имя>` | Сменить модель |
 | `/stats` | Статистика памяти |
 | `/learn` | Сохранить диалог как навык |
 | `/load-config <путь>` | Загрузить 1С-конфигурацию |
-| `/search-code <запрос>` | Поиск по объектам конфигурации |
+| `/search-code <запрос>` | Поиск по объектам конфигурации (FTS) |
+| `/semantic-search <запрос>` | Семантический поиск по коду |
+| `/auto-search on\|off` | Вкл/выкл автоматический поиск кода (по умолч. вкл) |
+| `/explain <Объект.Метод>` | Объяснение работы метода |
+| `/extract-my-code <вх> [вых]` | Извлечь код из файла с маркерами |
+| `/load-measurements <путь>` | Загрузить замеры производительности |
+| `/top-slow [лимит] [объект]` | Топ медленных объектов |
+| `/explain-slow <объект>` | Анализ медленного объекта |
+| `/build-graph` | Построить граф вызовов |
+| `/callers <Объект.Метод>` | Кто вызывает метод |
+| `/callees <Объект.Метод>` | Что вызывает метод |
+| `/cycles` | Циклические зависимости |
+| `/graph-viz [объект]` | Экспорт графа в GraphML |
+| `/compare-config <старая> <новая>` | Сравнить конфигурации |
+| `/comparison-summary` | Сводка последнего сравнения |
+| `/diff-module <объект>` | Diff модуля |
+| `/changed-objects [тип]` | Список изменённых объектов |
 | `/next` | Очистить память пациента |
 | `/exit` | Выход |
 
@@ -52,6 +68,8 @@ npx tsx chat.ts --stream
 - **Patient Knowledge Base** — код пациента сохраняется в `patient_kb.db`, доступен в контексте LLM и поиске
 - **ConfigLoader** — загрузка 1С-конфигураций (XML + BSL из Ext/ и Forms/)
 - **FTS5-поиск** — по загруженным конфигурациям с LIKE-fallback
+- **Семантический поиск (Ollama embeddings)** — автоматический поиск модулей по смыслу при код-запросах (nomic-embed-text, 768-dim)
+- **Автоматический поиск кода** — `/auto-search on|off`; при код-запросах ищет релевантные модули без ручного `/search-code`
 - **Анти-паттерны** — эхолалия, парафазия, контаминация, галлюцинация
 - **Production-grade system prompt** — загружается из `docs/production-grade_system_prompt.md`
 - **Streaming** — `--stream`, многострочный ввод, визуальные разделители
@@ -91,6 +109,7 @@ npx tsx chat.ts --stream
 
 | Commit | Описание |
 |--------|----------|
+| `HEAD` | Автоматический семантический поиск при код-запросах; Tool Suggestion Check исправлен; `/auto-search on\|off`; тесты codeQueryFlow (11 тестов) |
 | `84e219c` | config storage guide, fuzzy command matching, INSERT OR IGNORE, seedTools always loads knowledge |
 | `768b682` | null out lazy init components after /next to prevent stale deps |
 | `87bebd6` | /next now initializes storages if missing before clearing |

@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "vitest run"
+    "build": "tsc",
+    "build:copy": "tsc && powershell -Command \"Get-ChildItem dist/*.js | Copy-Item -Destination src/ -Force; Get-ChildItem dist/*.js.map | Copy-Item -Destination src/ -Force 2>null\"",
+    "test": "vitest run",
+    "ci": "npm run build:copy && npm test"
   },
   "keywords": [],
   "author": "",

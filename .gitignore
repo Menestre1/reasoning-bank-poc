@@ -34,3 +34,6 @@ tmp/
 
 # Scratch (history junk - tests, backups, diagnostics, old data)
 scratch/
+
+# Runtime SQLite WAL files
+*.rvf

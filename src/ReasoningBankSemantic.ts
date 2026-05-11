@@ -105,6 +105,7 @@ export class ReasoningBankSemantic {
   private stmtUpdateExperience?: Database.Statement;
   private stmtUpdateSkill?: Database.Statement;
   private stmtInsert?: Database.Statement;
+  private stmtResetConsecutive?: Database.Statement;
   private stmtDeleteExpired?: Database.Statement;
   private stmtSelectAll?: Database.Statement;
   private stmtSelectCount?: Database.Statement;
@@ -166,6 +167,7 @@ export class ReasoningBankSemantic {
     this.stmtUpdateExperience = this.db.prepare('UPDATE rb_experiences SET consecutive_successes = consecutive_successes + 1, usage_count = usage_count + 1 WHERE id = ?');
     this.stmtUpdateSkill = this.db.prepare('UPDATE rb_experiences SET is_skill = 1, consecutive_successes = consecutive_successes + 1, usage_count = usage_count + 1 WHERE id = ?');
     this.stmtInsert = this.db.prepare(`INSERT OR IGNORE INTO rb_experiences (id, task, outcome, content, domain, error_type, confidence, consecutive_successes, is_skill, user_input, metadata, expires_at, embedding, language) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    this.stmtResetConsecutive = this.db.prepare('UPDATE rb_experiences SET consecutive_successes = 0, usage_count = usage_count + 1 WHERE id = ?');
     this.stmtDeleteExpired = this.db.prepare(`DELETE FROM rb_experiences WHERE expires_at IS NOT NULL AND expires_at < datetime('now') AND is_skill = 0`);
     this.stmtSelectAll = this.db.prepare('SELECT * FROM rb_experiences');
     this.stmtSelectCount = this.db.prepare('SELECT COUNT(*) as c FROM rb_experiences');
@@ -306,7 +308,7 @@ export class ReasoningBankSemantic {
         console.log(`[ReasoningBank] recordFeedback after promotion: consecutive=${consecutive}`);
       }
     } else {
-      this.stmtUpdateExperience?.run(expId); // SQL does: consecutive_successes = 0
+      this.stmtResetConsecutive?.run(expId);
       consecutive = 0;
     }
 
@@ -542,6 +544,7 @@ export class ReasoningBankSemantic {
     this.stmtUpdateExperience = undefined;
     this.stmtUpdateSkill = undefined;
     this.stmtInsert = undefined;
+    this.stmtResetConsecutive = undefined;
     this.stmtDeleteExpired = undefined;
     this.stmtSelectAll = undefined;
     this.stmtSelectCount = undefined;

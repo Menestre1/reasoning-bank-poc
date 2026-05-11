@@ -43,6 +43,8 @@ interface AgentSession {
   pendingToolParamName: string | null;
   // Dialogue save
   lastDialogueId?: string | null;
+  // Auto-search flag
+  autoSearchEnabled: boolean;
 }
 
 const LANGUAGE_KEYWORDS: Record<Language, string[]> = {
@@ -53,6 +55,18 @@ const LANGUAGE_KEYWORDS: Record<Language, string[]> = {
   'Go': ['func ', 'package ', ':=', 'go ', 'defer'],
   'general': [],
 };
+
+const CODE_KEYWORDS = [
+  'код', 'модуль', 'обработк', 'функци', 'процедур', 'анализ',
+  'ошибк', 'исправ', 'переделай', 'напиши', 'создай', 'реализуй',
+  'code', 'module', 'function', 'procedure', 'analy', 'error',
+  'fix', 'refactor', 'implement', 'create', 'write', 'bsl', '1c',
+  'алгоритм', 'алгорит', 'метод', 'класс', 'запрос', 'отчет',
+  'печатн', 'форму', 'компоновк', 'макет', 'шаблон', 'таблиц',
+  'документ', 'справочник', 'регистр', 'перечисление', 'констант',
+  'сниппет', 'пример', 'шаблон', 'типов', 'типовой',
+  'отбор', 'фильтр', 'exception', 'xml', 'выгрузк', 'загрузк',
+];
 
 export class LirAgent {
   private memory: ReasoningBankSemantic;
@@ -126,6 +140,7 @@ export class LirAgent {
       pendingToolInput: '',
       waitingForToolParameter: false,
       pendingToolParamName: null,
+      autoSearchEnabled: true,
     };
 
     this.systemPrompt = options.systemPrompt || 'Ты — Лирь, полезный ассистент. Отвечай кратко и по делу.';
@@ -240,6 +255,11 @@ export class LirAgent {
     return { language: bestLanguage, confidence, matches };
   }
 
+  private isCodeQuery(userInput: string): boolean {
+    const lower = userInput.toLowerCase();
+    return CODE_KEYWORDS.some(kw => lower.includes(kw));
+  }
+
   async processMessage(userInput: string): Promise<any> {
     userInput = this.normalizeCommand(userInput);
     // Обработка команд загрузки и поиска
@@ -334,6 +354,19 @@ export class LirAgent {
         warnings: result.warnings,
         action: 'waiting_feedback',
       };
+    }
+
+    // Toggle auto-search
+    if (userInput.startsWith('/auto-search')) {
+      const arg = userInput.slice(13).trim().toLowerCase();
+      if (arg === 'off') {
+        this.session.autoSearchEnabled = false;
+        return this.createResponse('🔍 Автоматический поиск кода отключён. Используйте /search-code для ручного поиска.');
+      } else if (arg === 'on') {
+        this.session.autoSearchEnabled = true;
+        return this.createResponse('🔍 Автоматический поиск кода включён.');
+      }
+      return this.createResponse(`Использование: /auto-search on|off (сейчас: ${this.session.autoSearchEnabled ? 'вкл' : 'выкл'})`);
     }
 
     // Clear all patient data for next patient
@@ -450,7 +483,11 @@ export class LirAgent {
     }
 
     // 2. Semantic analysis - should we suggest a tool?
-    if (!this.session.lastDetectedLanguage || this.session.lastDetectedLanguage === 'general') {
+    // Skip tool suggestion if config is loaded and query is code-related,
+    // so processWithLanguage's code search handles it
+    if (this.configStorage && this.isCodeQuery(userInput) && this.session.autoSearchEnabled) {
+      console.log(`[LirAgent] Code-related query with config loaded — skipping tool suggestion, will search config code`);
+    } else if (!this.session.lastDetectedLanguage || this.session.lastDetectedLanguage === 'general') {
       console.log(`[LirAgent] Running semantic analysis for: "${userInput}"`);
       const intentResult = await this.toolIntegration?.analyzeIntent(userInput);
 
@@ -763,7 +800,11 @@ export class LirAgent {
     }
 
     // Semantic analysis
-    if (!this.session.lastDetectedLanguage || this.session.lastDetectedLanguage === 'general') {
+    // Skip tool suggestion if config is loaded and query is code-related,
+    // so code search in LLM interaction path handles it
+    if (this.configStorage && this.isCodeQuery(userInput) && this.session.autoSearchEnabled) {
+      console.log(`[LirAgent] Code-related query with config loaded — skipping tool suggestion`);
+    } else if (!this.session.lastDetectedLanguage || this.session.lastDetectedLanguage === 'general') {
       const intentResult = await this.toolIntegration?.analyzeIntent(userInput);
       if (intentResult?.shouldSuggest && intentResult.tool) {
         this.session.waitingForTool = true;
@@ -894,22 +935,44 @@ export class LirAgent {
       seen.add(item.content);
       formattedBlocks.push(`\`\`\`${item.language || ''}\n${item.content}\n\`\`\``);
     }
-    // Semantic search over loaded config modules (domain=config-code)
-    try {
-      const configResults = await this.memory.retrieve(userInput, { domain: 'config-code', k: 3 });
-      for (const r of configResults) {
-        const exp = r.experience;
-        if (!exp.content || r.similarity < 0.4) continue;
-        if (seen.has(exp.content)) continue;
-        seen.add(exp.content);
-        formattedBlocks.push(`// ${exp.task}\n\`\`\`bsl\n${exp.content}\n\`\`\``);
+    // Semantic search over loaded config modules (Ollama embeddings, fallback to RB)
+    if (this.configStorage) {
+      try {
+        // Use Ollama embeddings if available
+        const qEmb = await this.llmClient.getEmbedding(userInput);
+        if (qEmb.length > 0) {
+          const vec = new Float32Array(qEmb);
+          const configResults = await this.configStorage.findSimilarModulesOllama(vec, 5, 0.35);
+          for (const r of configResults) {
+            if (seen.has(r.snippet)) continue;
+            seen.add(r.snippet);
+            formattedBlocks.push(`// ${r.objectType}.${r.name} [sim=${r.similarity.toFixed(3)}]\n\`\`\`bsl\n${r.snippet}\n\`\`\``);
+          }
+          if (configResults.length > 0) {
+            console.log(`[Config] Ollama semantic search: ${configResults.length} modules found (top sim=${configResults[0]!.similarity.toFixed(3)})`);
+          }
+        }
+      } catch (err: any) {
+        // Fallback: hashEmbedding via RB retrieve (low threshold for better recall)
+        console.log(`[Config] Ollama search unavailable, falling back to RB: ${err.message}`);
+        try {
+          const rbResults = await this.memory.retrieve(userInput, { domain: 'config-code', k: 10 });
+          const matched = rbResults.filter(r => r.experience.content && r.similarity >= 0.2);
+          for (const r of matched) {
+            const exp = r.experience;
+            if (seen.has(exp.content)) continue;
+            seen.add(exp.content);
+            formattedBlocks.push(`// ${exp.task} [sim=${r.similarity.toFixed(3)}]\n\`\`\`bsl\n${exp.content}\n\`\`\``);
+          }
+          if (matched.length > 0) console.log(`[Config] RB fallback: ${matched.length} modules (top sim=${matched[0]!.similarity.toFixed(3)})`);
+        } catch { /* give up */ }
       }
-    } catch (err: any) {
-      console.log(`[Config] Semantic search error (non-fatal): ${err.message}`);
     }
     if (formattedBlocks.length > 0) {
       fullSystemPrompt += `\n\n## Code from this patient\n${formattedBlocks.join('\n\n')}`;
       console.log(`[Code] Injected ${formattedBlocks.length} code block(s) into prompt context (patient + config)`);
+    } else if (this.configStorage) {
+      fullSystemPrompt += `\n\n## Note: Configuration is already loaded and code is in context. Study and analyze the found code. Do NOT ask the user to load config — it is already present. Do NOT suggest /search-code — search is automatic.`;
     }
 
     this.session.conversationHistory.push({ role: 'user', content: userInput });
@@ -1228,22 +1291,44 @@ export class LirAgent {
       seen.add(item.content);
       formattedBlocks.push(`\`\`\`${item.language || ''}\n${item.content}\n\`\`\``);
     }
-    // Semantic search over loaded config modules (domain=config-code)
-    try {
-      const configResults = await this.memory.retrieve(userInput, { domain: 'config-code', k: 3 });
-      for (const r of configResults) {
-        const exp = r.experience;
-        if (!exp.content || r.similarity < 0.4) continue;
-        if (seen.has(exp.content)) continue;
-        seen.add(exp.content);
-        formattedBlocks.push(`// ${exp.task}\n\`\`\`bsl\n${exp.content}\n\`\`\``);
+    // Semantic search over loaded config modules (Ollama embeddings, fallback to RB)
+    if (this.configStorage) {
+      try {
+        // Use Ollama embeddings if available
+        const qEmb = await this.llmClient.getEmbedding(userInput);
+        if (qEmb.length > 0) {
+          const vec = new Float32Array(qEmb);
+          const configResults = await this.configStorage.findSimilarModulesOllama(vec, 5, 0.35);
+          for (const r of configResults) {
+            if (seen.has(r.snippet)) continue;
+            seen.add(r.snippet);
+            formattedBlocks.push(`// ${r.objectType}.${r.name} [sim=${r.similarity.toFixed(3)}]\n\`\`\`bsl\n${r.snippet}\n\`\`\``);
+          }
+          if (configResults.length > 0) {
+            console.log(`[Config] Ollama semantic search: ${configResults.length} modules found (top sim=${configResults[0]!.similarity.toFixed(3)})`);
+          }
+        }
+      } catch (err: any) {
+        // Fallback: hashEmbedding via RB retrieve (low threshold for better recall)
+        console.log(`[Config] Ollama search unavailable, falling back to RB: ${err.message}`);
+        try {
+          const rbResults = await this.memory.retrieve(userInput, { domain: 'config-code', k: 10 });
+          const matched = rbResults.filter(r => r.experience.content && r.similarity >= 0.2);
+          for (const r of matched) {
+            const exp = r.experience;
+            if (seen.has(exp.content)) continue;
+            seen.add(exp.content);
+            formattedBlocks.push(`// ${exp.task} [sim=${r.similarity.toFixed(3)}]\n\`\`\`bsl\n${exp.content}\n\`\`\``);
+          }
+          if (matched.length > 0) console.log(`[Config] RB fallback: ${matched.length} modules (top sim=${matched[0]!.similarity.toFixed(3)})`);
+        } catch { /* give up */ }
       }
-    } catch (err: any) {
-      console.log(`[Config] Semantic search error (non-fatal): ${err.message}`);
     }
     if (formattedBlocks.length > 0) {
       fullSystemPrompt += `\n\n## Code from this patient\n${formattedBlocks.join('\n\n')}`;
       console.log(`[Code] Injected ${formattedBlocks.length} code block(s) into prompt context (patient + config)`);
+    } else if (this.configStorage) {
+      fullSystemPrompt += `\n\n## Note: Configuration is already loaded and code is in context. Study and analyze the found code. Do NOT ask the user to load config — it is already present. Do NOT suggest /search-code — search is automatic.`;
     }
 
     this.session.conversationHistory.push({ role: 'user', content: userInput });
@@ -1341,6 +1426,19 @@ export class LirAgent {
       };
     }
 
+    // /auto-search toggle - stay in feedback mode
+    if (lowerInput.startsWith('/auto-search')) {
+      const arg = userInput.slice(13).trim().toLowerCase();
+      if (arg === 'off') {
+        this.session.autoSearchEnabled = false;
+        return { ...this.createResponse('🔍 Автоматический поиск кода отключён. Используйте /search-code для ручного поиска.'), exitsFeedbackMode: false };
+      } else if (arg === 'on') {
+        this.session.autoSearchEnabled = true;
+        return { ...this.createResponse('🔍 Автоматический поиск кода включён.'), exitsFeedbackMode: false };
+      }
+      return { ...this.createResponse(`Использование: /auto-search on|off (сейчас: ${this.session.autoSearchEnabled ? 'вкл' : 'выкл'})`), exitsFeedbackMode: false };
+    }
+
     // /tools - show tools, stay in feedback mode
     if (lowerInput === '/tools' || lowerInput === '/help') {
       const knowledgeResult = await this.searchKnowledge('список всех инструментов и команд');
@@ -1379,7 +1477,7 @@ export class LirAgent {
 
     // Unknown command in feedback mode
     return {
-      ...this.createResponse(`❌ Неизвестная команда "${userInput}" в режиме ожидания оценки. Доступные команды: /learn, /stats, /tools, /help, /exit`),
+      ...this.createResponse(`❌ Неизвестная команда "${userInput}" в режиме ожидания оценки. Доступные команды: /learn, /stats, /tools, /help, /auto-search, /exit`),
       exitsFeedbackMode: false,
     };
   }
@@ -1916,7 +2014,7 @@ export class LirAgent {
       await this.fsReader.ensureAllowed(targetPath);
       if (!this.configStorage) {
         this.configStorage = new ConfigStorage(this.dbPath);
-        this.configLoader = new ConfigLoader(this.memory, this.configStorage, this.fsReader);
+        this.configLoader = new ConfigLoader(this.memory, this.configStorage, this.fsReader, this.llmClient);
       }
       const result = await this.configLoader!.loadDirectory(targetPath);
       const total = await this.configStorage!.getObjectCount();
@@ -1930,17 +2028,17 @@ export class LirAgent {
           id: `config-loaded-${Date.now()}`,
           task: `Загруженная конфигурация из ${targetPath}`,
           outcome: 'success',
-          content: `Загружена конфигурация из ${targetPath}. В ней ${total} объектов: ${objectsList}. Модули сохранены в FTS5-индекс. Для поиска кода используйте /search-code.`,
+          content: `Загружена конфигурация из ${targetPath}. В ней ${total} объектов: ${objectsList}. Модули сохранены с семантическими эмбеддингами. Если пользователь спрашивает о коде или проблеме в обработке, отчёте, регистре или документе — найди релевантные модули через семантический поиск (findSimilarModulesOllama) и ответь на основе их кода. Не говори, что код не предоставлен — он загружен. Не проси загрузить конфигурацию снова — она уже загружена. Анализируй то, что есть, и работай с этим.`,
           domain: 'knowledge',
           error_type: 'none',
           confidence: 0.95,
           metadata: { is_skill: true, language: '1С (BSL)', description: 'Информация о загруженной конфигурации' },
-          user_input: 'загруженная конфигурация что загружено какие объекты',
+          user_input: 'загруженная конфигурация что загружено какие объекты код обработка регистр документ отчёт',
         });
       } catch (err: any) {
         console.log(`[Agent] Warning: could not record config knowledge entry: ${err.message}`);
       }
-      return this.createResponse(`${msg}\n\n📌 Для поиска кода используйте /search-code <запрос>\nМожно работать.`);
+      return this.createResponse(`${msg}\n\nМожно работать.`);
     } catch (err: any) {
       return this.createResponse(`❌ Ошибка: ${err.message}`);
     }

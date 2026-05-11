@@ -172,6 +172,24 @@ export class OllamaClient {
     }
   }
 
+  async getEmbedding(text: string, model?: string): Promise<number[]> {
+    const embedModel = model || 'nomic-embed-text';
+    const url = `${this.baseUrl}/api/embed`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ model: embedModel, input: text }),
+      });
+      if (!response.ok) throw new Error(`Embedding API error: ${response.status}`);
+      const data = await response.json();
+      return data.embeddings?.[0] || [];
+    } catch (err: any) {
+      console.error(`[OllamaClient] Embedding error (${embedModel}): ${err.message}`);
+      throw err;
+    }
+  }
+
   async ping(model?: string): Promise<boolean> {
     try {
       await this.chat([{ role: 'user', content: 'ping' }], model);
