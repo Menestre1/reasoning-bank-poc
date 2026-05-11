@@ -122,6 +122,11 @@ export class ComparisonStorage {
     }
   }
 
+  async clearAll(): Promise<void> {
+    this.db.exec('DELETE FROM comparison_details');
+    this.db.exec('DELETE FROM comparisons');
+  }
+
   close(): void {
     this.db.close();
   }

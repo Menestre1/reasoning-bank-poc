@@ -142,8 +142,22 @@ async function main() {
     });
   };
 
+  const getSimpleInput = (prompt: string): Promise<string> => {
+    return new Promise((resolve) => {
+      rl.once('line', (line) => {
+        resolve(line);
+      });
+      process.stdout.write(prompt);
+    });
+  };
+
+  let simpleInputMode = false;
+
   while (true) {
-    const input = await getMultilineInput('\n💬 Вы:\n  > ');
+    const input = simpleInputMode
+      ? await getSimpleInput('\n💬 Вы:\n  > ')
+      : await getMultilineInput('\n💬 Вы:\n  > ');
+    simpleInputMode = false; // reset after each input
     const trimmed = input.trim();
 
     if (!trimmed) continue;
@@ -199,6 +213,7 @@ async function main() {
 
       if (result.action === 'ask_language') {
         console.log(`\n🤖 Лирь: ${result.languageQuestion}`);
+        simpleInputMode = true;
         continue;
       }
 
@@ -207,6 +222,7 @@ async function main() {
         if (!useStreaming) {
           console.log(`\n🤖 Лирь: ${result.response}`);
         }
+        simpleInputMode = true;
         continue;
       }
 

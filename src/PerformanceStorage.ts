@@ -104,6 +104,10 @@ export class PerformanceStorage {
     return stmt.get(`%${objectName}%`) as any;
   }
 
+  async clearAll(): Promise<void> {
+    this.db.exec('DELETE FROM measurements');
+  }
+
   close(): void {
     this.db.close();
   }

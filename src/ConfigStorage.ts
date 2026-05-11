@@ -14,6 +14,10 @@ export interface ConfigObjectRecord {
 
 export class ConfigStorage {
   private db: DatabaseType;
+  private ftsQueries = 0;
+  private ftsTotalMs = 0;
+  private likeQueries = 0;
+  private likeTotalMs = 0;
 
   constructor(dbPath: string) {
     this.db = new Database(dbPath);
@@ -77,6 +81,7 @@ export class ConfigStorage {
   }
 
   async searchByFTS(query: string, limit = 20, exact = false): Promise<{ id: string; name: string; snippet: string; rank?: number }[]> {
+    const start = Date.now();
     // Try FTS first
     let ftsQuery = query;
     if (exact && !query.startsWith('"')) {
@@ -104,6 +109,8 @@ export class ConfigStorage {
     }
 
     if (rows.length > 0) {
+      this.ftsQueries++;
+      this.ftsTotalMs += Date.now() - start;
       return rows.map(row => ({
         id: row.id,
         name: row.name,
@@ -121,6 +128,8 @@ export class ConfigStorage {
       LIMIT ?
     `);
     const likeRows = likeStmt.all(likePattern, likePattern, limit) as any[];
+    this.likeQueries++;
+    this.likeTotalMs += Date.now() - start;
     return likeRows.map(row => ({
       id: row.id,
       name: row.name,
@@ -138,6 +147,21 @@ export class ConfigStorage {
   async getAllObjects(): Promise<{ id: string; name: string; object_type: string }[]> {
     const stmt = this.db.prepare('SELECT id, name, object_type FROM config_objects');
     return stmt.all() as any[];
+  }
+
+  async clearAll(): Promise<void> {
+    this.db.exec('DELETE FROM config_objects_fts');
+    this.db.exec('DELETE FROM config_objects');
+  }
+
+  getSearchStats(): { ftsQueries: number; ftsAvgMs: number; likeQueries: number; likeAvgMs: number; totalQueries: number } {
+    return {
+      ftsQueries: this.ftsQueries,
+      ftsAvgMs: this.ftsQueries > 0 ? this.ftsTotalMs / this.ftsQueries : 0,
+      likeQueries: this.likeQueries,
+      likeAvgMs: this.likeQueries > 0 ? this.likeTotalMs / this.likeQueries : 0,
+      totalQueries: this.ftsQueries + this.likeQueries,
+    };
   }
 
   close(): void {

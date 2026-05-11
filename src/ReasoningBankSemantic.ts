@@ -375,6 +375,10 @@ export class ReasoningBankSemantic {
     return { warnings, strategy, enrichedPrompt };
   }
 
+  getCacheStats(): { hits: number; misses: number; size: number; maxSize: number; hitRate: number } {
+    return this.cache.getStats();
+  }
+
   async getStats() {
     await this.ensureInitialized();
 
@@ -490,6 +494,19 @@ export class ReasoningBankSemantic {
         };
       })
       .filter(tool => tool.tool_metadata !== null);
+  }
+
+  async clearByDomain(domain: string): Promise<{ deleted: number }> {
+    await this.ensureInitialized();
+    const result = this.db.prepare('DELETE FROM rb_experiences WHERE domain = ?').run(domain);
+    const deleted = result.changes || 0;
+    if (deleted > 0) {
+      this.cache.clear();
+      await this.rebuildHNSWIndex();
+      this.hnsw.save();
+      this.persist();
+    }
+    return { deleted };
   }
 
   async cleanupExpired(): Promise<{ deleted: number }> {

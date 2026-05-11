@@ -13,6 +13,8 @@ export class LRUCache<T> {
   private cache = new Map<string, LRUCacheEntry<T>>();
   private maxSize: number;
   private ttlMs: number;
+  private hits = 0;
+  private misses = 0;
 
   constructor(options: { maxSize?: number; ttlMs?: number } = {}) {
     this.maxSize = options.maxSize || 256;
@@ -30,13 +32,18 @@ export class LRUCache<T> {
   get(key: string): T | null {
     const hash = this.hashKey(key);
     const entry = this.cache.get(hash);
-    if (!entry) return null;
-
-    if (Date.now() > entry.expiresAt) {
-      this.cache.delete(hash);
+    if (!entry) {
+      this.misses++;
       return null;
     }
 
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(hash);
+      this.misses++;
+      return null;
+    }
+
+    this.hits++;
     // LRU: перемещаем в конец (most recently used)
     this.cache.delete(hash);
     this.cache.set(hash, entry);
@@ -73,7 +80,14 @@ export class LRUCache<T> {
     return this.cache.size;
   }
 
-  get hitRate(): { hits: number; misses: number } | null {
-    return null; // Можно добавить счётчики если нужно
+  getStats(): { hits: number; misses: number; size: number; maxSize: number; hitRate: number } {
+    const total = this.hits + this.misses;
+    return {
+      hits: this.hits,
+      misses: this.misses,
+      size: this.cache.size,
+      maxSize: this.maxSize,
+      hitRate: total > 0 ? this.hits / total : 0,
+    };
   }
 }

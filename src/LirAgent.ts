@@ -78,6 +78,10 @@ export class LirAgent {
   private toolIntegration?: ToolIntegration;
   private agentToolDialog?: AgentToolDialog;
   private patientKB: PatientKnowledgeBase;
+  private feedbackYes = 0;
+  private feedbackNo = 0;
+  private feedbackCancel = 0;
+  private skillPromotions = 0;
 
   constructor(options: {
     dbPath: string;
@@ -331,11 +335,43 @@ export class LirAgent {
       };
     }
 
-    // Clear patient knowledge for next patient
+    // Clear all patient data for next patient
     if (userInput === '/next') {
       const profile = this.session.agentId || 'default';
       this.patientKB.clearProfile(profile);
-      return this.createResponse('🧹 Память пациента очищена. Можно начинать с новым пациентом.');
+      const cleared: string[] = [];
+      if (this.configStorage) {
+        await this.configStorage.clearAll();
+        cleared.push('config');
+      }
+      if (this.compStorage) {
+        await this.compStorage.clearAll();
+        cleared.push('comparisons');
+      }
+      if (this.perfStorage) {
+        await this.perfStorage.clearAll();
+        cleared.push('measurements');
+      }
+      for (const domain of ['dialogue', 'config-code']) {
+        const result = await this.memory.clearByDomain(domain);
+        if (result.deleted > 0) cleared.push(`${domain} (${result.deleted})`);
+      }
+      this.session.conversationHistory = [];
+      this.session.lastDetectedLanguage = undefined;
+      this.session.lastUserInput = '';
+      this.session.lastAgentResponse = '';
+      this.session.lastDialogueId = undefined;
+      this.session.lastExperienceId = null;
+      this.session.waitingForFeedback = false;
+      this.session.waitingForErrorType = false;
+      this.session.waitingForLanguage = false;
+      this.session.waitingForTool = false;
+      this.feedbackYes = 0;
+      this.feedbackNo = 0;
+      this.feedbackCancel = 0;
+      this.skillPromotions = 0;
+      const details = cleared.length > 0 ? ` (${cleared.join(', ')})` : '';
+      return this.createResponse(`🧹 Память пациента полностью очищена${details}. Можно начинать с новым пациентом.`);
     }
 
     // Learn from last successful dialog (only if NOT waiting for feedback)
@@ -621,11 +657,43 @@ export class LirAgent {
       };
     }
 
-    // Clear patient knowledge for next patient
+    // Clear all patient data for next patient
     if (userInput === '/next') {
       const profile = this.session.agentId || 'default';
       this.patientKB.clearProfile(profile);
-      return this.createResponse('🧹 Память пациента очищена. Можно начинать с новым пациентом.');
+      const cleared: string[] = [];
+      if (this.configStorage) {
+        await this.configStorage.clearAll();
+        cleared.push('config');
+      }
+      if (this.compStorage) {
+        await this.compStorage.clearAll();
+        cleared.push('comparisons');
+      }
+      if (this.perfStorage) {
+        await this.perfStorage.clearAll();
+        cleared.push('measurements');
+      }
+      for (const domain of ['dialogue', 'config-code']) {
+        const result = await this.memory.clearByDomain(domain);
+        if (result.deleted > 0) cleared.push(`${domain} (${result.deleted})`);
+      }
+      this.session.conversationHistory = [];
+      this.session.lastDetectedLanguage = undefined;
+      this.session.lastUserInput = '';
+      this.session.lastAgentResponse = '';
+      this.session.lastDialogueId = undefined;
+      this.session.lastExperienceId = null;
+      this.session.waitingForFeedback = false;
+      this.session.waitingForErrorType = false;
+      this.session.waitingForLanguage = false;
+      this.session.waitingForTool = false;
+      this.feedbackYes = 0;
+      this.feedbackNo = 0;
+      this.feedbackCancel = 0;
+      this.skillPromotions = 0;
+      const details = cleared.length > 0 ? ` (${cleared.join(', ')})` : '';
+      return this.createResponse(`🧹 Память пациента полностью очищена${details}. Можно начинать с новым пациентом.`);
     }
 
     // Learn from last successful dialog
@@ -1305,6 +1373,7 @@ export class LirAgent {
     
     // Вариант "отмена" - не сохраняем в базу
     if (lower.match(/^(отмена|cancel|отменить)$/i)) {
+      this.feedbackCancel++;
       this.session.waitingForFeedback = false;
       this.session.waitingForErrorType = false;
       return {
@@ -1363,6 +1432,7 @@ export class LirAgent {
     warnings: ErrorWarning[];
     action: 'record_success';
   }> {
+    this.feedbackYes++;
     // Update dialogue record if exists
     if (this.session.lastDialogueId) {
       try {
@@ -1377,6 +1447,10 @@ export class LirAgent {
     if (this.session.lastExperienceId) {
       const feedback = await this.memory.recordFeedback(this.session.lastExperienceId, true);
       
+      if (feedback.promoted) {
+        this.skillPromotions++;
+      }
+
       const response = feedback.promoted
         ? `★ Отлично! Этот паттерн стал навыком (${feedback.consecutive}/3). Спасибо за оценку!`
         : `✅ Спасибо! Успешных применений подряд: ${feedback.consecutive}/3.`;
@@ -1403,6 +1477,7 @@ export class LirAgent {
     warnings: ErrorWarning[];
     action: 'learn_error';
   }> {
+    this.feedbackNo++;
     // Update dialogue record if exists
     if (this.session.lastDialogueId) {
       try {
@@ -1576,7 +1651,90 @@ export class LirAgent {
   }
 
   async getStats() {
-    return this.memory.getStats();
+    const memoryStats = await this.memory.getStats();
+    const cacheStats = this.memory.getCacheStats();
+    const searchStats = this.configStorage?.getSearchStats();
+    const patientStats = this.patientKB.getStats();
+
+    const totalYes = this.feedbackYes + this.feedbackNo + this.feedbackCancel;
+    const yesPct = totalYes > 0 ? ((this.feedbackYes / totalYes) * 100).toFixed(0) : '0';
+    const noPct = totalYes > 0 ? ((this.feedbackNo / totalYes) * 100).toFixed(0) : '0';
+    const cancelPct = totalYes > 0 ? ((this.feedbackCancel / totalYes) * 100).toFixed(0) : '0';
+
+    const lines: string[] = [
+      '📊 Статистика LirAgent',
+      '',
+      '--- ReasoningBank ---',
+      `Всего опытов: ${memoryStats.totalExperiences}`,
+      `Навыков (skills): ${memoryStats.skills}`,
+    ];
+
+    if (memoryStats.byOutcome && Object.keys(memoryStats.byOutcome).length > 0) {
+      for (const [outcome, count] of Object.entries(memoryStats.byOutcome)) {
+        lines.push(`  ${outcome}: ${count}`);
+      }
+    }
+
+    if (memoryStats.byErrorType && Object.keys(memoryStats.byErrorType).length > 0) {
+      lines.push(`Ошибок (failures): ${Object.values(memoryStats.byErrorType).reduce((a: number, b: unknown) => a + (b as number), 0)}`);
+      for (const [type, count] of Object.entries(memoryStats.byErrorType)) {
+        lines.push(`  ${type}: ${count}`);
+      }
+    }
+
+    lines.push(
+      '',
+      '--- Кэш LRU ---',
+      `Размер: ${cacheStats.size}/${cacheStats.maxSize}`,
+      `Попаданий: ${cacheStats.hits} (${(cacheStats.hitRate * 100).toFixed(0)}%)`,
+      `Промахов: ${cacheStats.misses}`,
+    );
+
+    if (searchStats) {
+      lines.push(
+        '',
+        '--- Поиск конфигурации ---',
+        `Всего запросов: ${searchStats.totalQueries}`,
+        `FTS5: ${searchStats.ftsQueries} запросов, среднее ${searchStats.ftsAvgMs.toFixed(1)} мс`,
+        `LIKE fallback: ${searchStats.likeQueries} запросов, среднее ${searchStats.likeAvgMs.toFixed(1)} мс`,
+      );
+    }
+
+    const patientTotal = patientStats.saveCount + patientStats.searchCount + patientStats.recentCount;
+    if (patientTotal > 0) {
+      lines.push(
+        '',
+        '--- PatientKB ---',
+        `Сохранено блоков кода: ${patientStats.saveCount}`,
+        `Поисков: ${patientStats.searchCount}`,
+        `Вызовов findRecentCode: ${patientStats.recentCount}`,
+      );
+    }
+
+    lines.push(
+      '',
+      '--- Обратная связь ---',
+      `"да": ${this.feedbackYes} (${yesPct}%)`,
+      `"нет": ${this.feedbackNo} (${noPct}%)`,
+      `"отмена": ${this.feedbackCancel} (${cancelPct}%)`,
+      `Промоушенов навыков: ${this.skillPromotions}`,
+    );
+
+    lines.push(
+      '',
+      '--- Сессия ---',
+      `Ожидание фидбека: ${this.session.waitingForFeedback}`,
+      `Последний язык: ${this.session.lastDetectedLanguage || 'не выбран'}`,
+    );
+
+    const response = lines.join('\n');
+
+    return {
+      response,
+      fullPrompt: '',
+      warnings: [],
+      action: 'respond' as const,
+    };
   }
 
   getCurrentModel(): string {

@@ -3,6 +3,9 @@ import { createHash } from 'crypto';
 
 export class PatientKnowledgeBase {
   private db: Database.Database;
+  private saveCount = 0;
+  private searchCount = 0;
+  private recentCount = 0;
 
   constructor(dbPath: string) {
     this.db = new Database(dbPath);
@@ -37,9 +40,11 @@ export class PatientKnowledgeBase {
       INSERT INTO patient_knowledge (id, patient_profile, content, content_hash, language, source)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(id, patientProfile, code, contentHash, language || null, source || null);
+    this.saveCount++;
   }
 
   async findRecentCode(patientProfile: string, limit = 5): Promise<{ content: string; language: string | null }[]> {
+    this.recentCount++;
     const rows = this.db.prepare(`
       SELECT content, language FROM patient_knowledge
       WHERE patient_profile = ?
@@ -50,7 +55,9 @@ export class PatientKnowledgeBase {
   }
 
   async searchCode(patientProfile: string, query: string, limit = 5): Promise<{ content: string; language: string | null }[]> {
-    const terms = query.split(/\s+/).filter(t => t.length > 2);
+    this.searchCount++;
+    // Limit terms to avoid SQLite "Expression tree is too large" error (max depth 1000)
+    const terms = query.split(/\s+/).filter(t => t.length > 2).slice(0, 20);
     if (terms.length === 0) return [];
     const conditions = terms.map(() => 'content LIKE ?');
     const params = terms.map(t => `%${t}%`);
@@ -60,8 +67,12 @@ export class PatientKnowledgeBase {
       ORDER BY created_at DESC
       LIMIT ?
     `;
-    const rows = this.db.prepare(sql).all(patientProfile, ...params, limit) as any[];
-    return rows.map(r => ({ content: r.content, language: r.language }));
+    try {
+      const rows = this.db.prepare(sql).all(patientProfile, ...params, limit) as any[];
+      return rows.map(r => ({ content: r.content, language: r.language }));
+    } catch {
+      return [];
+    }
   }
 
   countByProfile(patientProfile: string): number {
@@ -71,6 +82,14 @@ export class PatientKnowledgeBase {
 
   clearProfile(patientProfile: string): void {
     this.db.prepare('DELETE FROM patient_knowledge WHERE patient_profile = ?').run(patientProfile);
+  }
+
+  getStats(): { saveCount: number; searchCount: number; recentCount: number } {
+    return {
+      saveCount: this.saveCount,
+      searchCount: this.searchCount,
+      recentCount: this.recentCount,
+    };
   }
 
   close(): void {
