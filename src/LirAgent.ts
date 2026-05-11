@@ -899,6 +899,22 @@ export class LirAgent {
       console.log(`[PatientKB] Injected ${formattedBlocks.length} code block(s) into prompt context`);
     }
 
+    // Also search loaded config objects for relevant code
+    if (this.configStorage) {
+      try {
+        const configResults = await this.configStorage.searchByFTS(userInput, 3);
+        if (configResults.length > 0) {
+          const configBlocks = configResults.map(r =>
+            `**${r.name}**\n\`\`\`bsl\n${r.snippet}\n\`\`\``
+          );
+          fullSystemPrompt += `\n\n## Code from loaded configuration\n${configBlocks.join('\n\n')}`;
+          console.log(`[ConfigStorage] Injected ${configResults.length} config code snippet(s) into prompt context`);
+        }
+      } catch (err: any) {
+        console.log(`[ConfigStorage] Search error (non-fatal): ${err.message}`);
+      }
+    }
+
     this.session.conversationHistory.push({ role: 'user', content: userInput });
 
     const messages: ChatMessage[] = [
@@ -1218,6 +1234,22 @@ export class LirAgent {
     if (formattedBlocks.length > 0) {
       fullSystemPrompt += `\n\n## Code from this patient\n${formattedBlocks.join('\n\n')}`;
       console.log(`[PatientKB] Injected ${formattedBlocks.length} code block(s) into prompt context`);
+    }
+
+    // Also search loaded config objects for relevant code
+    if (this.configStorage) {
+      try {
+        const configResults = await this.configStorage.searchByFTS(userInput, 3);
+        if (configResults.length > 0) {
+          const configBlocks = configResults.map(r =>
+            `**${r.name}**\n\`\`\`bsl\n${r.snippet}\n\`\`\``
+          );
+          fullSystemPrompt += `\n\n## Code from loaded configuration\n${configBlocks.join('\n\n')}`;
+          console.log(`[ConfigStorage] Injected ${configResults.length} config code snippet(s) into prompt context`);
+        }
+      } catch (err: any) {
+        console.log(`[ConfigStorage] Search error (non-fatal): ${err.message}`);
+      }
     }
 
     this.session.conversationHistory.push({ role: 'user', content: userInput });
