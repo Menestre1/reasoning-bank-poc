@@ -340,18 +340,22 @@ export class LirAgent {
       const profile = this.session.agentId || 'default';
       this.patientKB.clearProfile(profile);
       const cleared: string[] = [];
-      if (this.configStorage) {
-        await this.configStorage.clearAll();
-        cleared.push('config');
+      // Ensure storages exist before clearing (may not be initialized in a fresh session)
+      if (!this.configStorage) {
+        this.configStorage = new ConfigStorage(this.dbPath);
       }
-      if (this.compStorage) {
-        await this.compStorage.clearAll();
-        cleared.push('comparisons');
+      await this.configStorage.clearAll();
+      cleared.push('config');
+      if (!this.compStorage) {
+        this.compStorage = new ComparisonStorage(this.dbPath);
       }
-      if (this.perfStorage) {
-        await this.perfStorage.clearAll();
-        cleared.push('measurements');
+      await this.compStorage.clearAll();
+      cleared.push('comparisons');
+      if (!this.perfStorage) {
+        this.perfStorage = new PerformanceStorage(this.dbPath);
       }
+      await this.perfStorage.clearAll();
+      cleared.push('measurements');
       for (const domain of ['dialogue', 'config-code']) {
         const result = await this.memory.clearByDomain(domain);
         if (result.deleted > 0) cleared.push(`${domain} (${result.deleted})`);
@@ -662,18 +666,22 @@ export class LirAgent {
       const profile = this.session.agentId || 'default';
       this.patientKB.clearProfile(profile);
       const cleared: string[] = [];
-      if (this.configStorage) {
-        await this.configStorage.clearAll();
-        cleared.push('config');
+      // Ensure storages exist before clearing (may not be initialized in a fresh session)
+      if (!this.configStorage) {
+        this.configStorage = new ConfigStorage(this.dbPath);
       }
-      if (this.compStorage) {
-        await this.compStorage.clearAll();
-        cleared.push('comparisons');
+      await this.configStorage.clearAll();
+      cleared.push('config');
+      if (!this.compStorage) {
+        this.compStorage = new ComparisonStorage(this.dbPath);
       }
-      if (this.perfStorage) {
-        await this.perfStorage.clearAll();
-        cleared.push('measurements');
+      await this.compStorage.clearAll();
+      cleared.push('comparisons');
+      if (!this.perfStorage) {
+        this.perfStorage = new PerformanceStorage(this.dbPath);
       }
+      await this.perfStorage.clearAll();
+      cleared.push('measurements');
       for (const domain of ['dialogue', 'config-code']) {
         const result = await this.memory.clearByDomain(domain);
         if (result.deleted > 0) cleared.push(`${domain} (${result.deleted})`);
