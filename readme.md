@@ -87,6 +87,16 @@ npx tsx chat.ts --stream
 
 ---
 
+## Recent Changes
+
+| Commit | Описание |
+|--------|----------|
+| `84e219c` | config storage guide, fuzzy command matching, INSERT OR IGNORE, seedTools always loads knowledge |
+| `768b682` | null out lazy init components after /next to prevent stale deps |
+| `87bebd6` | /next now initializes storages if missing before clearing |
+| `958690d` | full /next cleanup, single-line feedback, fix FTS crash on long input |
+| `727dbea` | ConfigLoader: load BSL from Forms, LIKE fallback, fix tokenizer |
+
 ## Лицензия
 
 ISC
