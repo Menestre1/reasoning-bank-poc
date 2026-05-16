@@ -1,6 +1,6 @@
 ﻿# Cognitive Runtime Specification архитектуры LirAgent 2.1» (для агента и архитектора)
 ---
-name: liragent-44-rules
+name: liragent-50-rules
 description: |
   Скил 50 правил архитектуры LirAgent 2.1 — генетический код системы памяти выживания.
   Этот скилл предназначен ДЛЯ САМОГО LirAGENT в процессе его работы, а также для разработчика.
