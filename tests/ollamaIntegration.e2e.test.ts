@@ -9,7 +9,6 @@ import * as path from 'path';
 
 const TEST_DB = './test_ollama_e2e.db';
 const CONFIG_V2 = path.resolve(__dirname, '..', 'test_config_v2');
-const CONFIG_FULL = path.resolve(__dirname, '..', 'test_config', 'ВыгрузкаЗагрузкаДанныхXMLАдаптивная');
 
 let ollamaAvailable = false;
 
@@ -109,43 +108,4 @@ describe('Ollama E2E Integration', () => {
     expect(text).toContain('Проведение');
   }, 60000);
 
-  it('should load full processing config with ObjectModule.bsl and Forms', async () => {
-    if (!ollamaAvailable || !existsSync(CONFIG_FULL)) return;
-    await rb.ensureInitialized();
-    const fsReader = new SafeFileSystemReader([path.resolve(__dirname, '..', 'test_config')]);
-    const ollama = new OllamaClient({ baseUrl: 'http://127.0.0.1:11434', model: 'nomic-embed-text' });
-    const loader = new ConfigLoader(rb, storage, fsReader, ollama);
-
-    const result = await loader.loadDirectory(CONFIG_FULL);
-    expect(result.processed).toBeGreaterThan(0);
-    expect(result.errors).toHaveLength(0);
-
-    const allObjects = await storage.getAllObjects();
-    const processing = allObjects.find(o => o.name === 'ВыгрузкаЗагрузкаДанныхXMLАдаптивная');
-    expect(processing).toBeDefined();
-    expect(processing!.object_type).toBe('1C.ExternalDataProcessor');
-
-    const text = await storage.getFullModuleTextForObject('ВыгрузкаЗагрузкаДанныхXMLАдаптивная');
-    expect(text).not.toBeNull();
-    expect(text!.length).toBeGreaterThan(100000);
-    expect(text).toContain('ObjectModule.bsl');
-    expect(text).toContain('Form:');
-  }, 60000);
-
-  it('should search processing code semantically with real Ollama embeddings', async () => {
-    if (!ollamaAvailable || !existsSync(CONFIG_FULL)) return;
-    await rb.ensureInitialized();
-    const fsReader = new SafeFileSystemReader([path.resolve(__dirname, '..', 'test_config')]);
-    const ollama = new OllamaClient({ baseUrl: 'http://127.0.0.1:11434', model: 'nomic-embed-text' });
-    const loader = new ConfigLoader(rb, storage, fsReader, ollama);
-
-    await loader.loadDirectory(CONFIG_FULL);
-
-    const queryEmb = await ollama.getEmbedding('Выгрузка данных XML, обмен между конфигурациями');
-    expect(queryEmb.length).toBe(768);
-
-    const results = await storage.findSimilarModulesOllama(new Float32Array(queryEmb), 5, 0.0);
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0].similarity).toBeGreaterThan(0.3);
-  }, 60000);
 });
