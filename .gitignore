@@ -35,5 +35,9 @@ tmp/
 # Scratch (history junk - tests, backups, diagnostics, old data)
 scratch/
 
+# Test configuration - actual configs not committed
+test_config/*
+!test_config/.gitkeep
+
 # Runtime SQLite WAL files
 *.rvf
