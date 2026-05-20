@@ -38,6 +38,8 @@ scratch/
 # Test configuration - actual configs not committed
 test_config/*
 !test_config/.gitkeep
+test_config_v2/*
+!test_config_v2/.gitkeep
 
 # Runtime SQLite WAL files
 *.rvf
